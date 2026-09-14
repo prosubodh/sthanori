@@ -696,4 +696,127 @@ sequenceDiagram
   - `ResolutionStatus`: `SUBMITTED` $\to$ `UNDER_REVIEW` $\to$ `CONCEDED_IN_FULL` | `PARTIALLY_CONCEDED` | `UPHELD_REJECTED`.
   - `FinancialAdjustment`: Automated credit memo adjusting the deposit escrow settlement balance.
 
+---
+
+## 10. Lease Guarantors, Corporate Master Leases & Deposit Replacement Programs
+
+### 10.1 Lease Guarantors & Co-Signer Framework
+
+When renting applicants exhibit borderline underwriting metrics (e.g. students, foreign nationals, or applicants with income $< 3\times$ rent), landlords mitigate default risk through third-party credit enhancement:
+
+```mermaid
+classDiagram
+    class LeaseParty {
+        <<abstract>>
+        +String id
+        +String tenantId
+        +String legalName
+    }
+    class PrimaryRenter {
+        +Boolean hasPossessionRights
+        +Boolean hasPaymentObligation
+    }
+    class CoSigner {
+        +Boolean hasPossessionRights
+        +Boolean hasPaymentObligation
+        +JointSeveralLiability
+    }
+    class LeaseGuarantorAggregate {
+        +String guarantorId
+        +String leaseId
+        +GuarantorLiabilityType liabilityType
+        +MonetaryAmount liabilityCapAmount
+        +Boolean includesRenewals
+        +Boolean hasPossessionRights: false
+        +demandPayment(arrears)
+    }
+
+    LeaseParty <|-- PrimaryRenter
+    LeaseParty <|-- CoSigner
+    LeaseParty <|-- LeaseGuarantorAggregate
+```
+
+- **Co-Signer vs. Guarantor Distinction (Domain Invariant)**:
+  - **`Co-Signer`**: Signs the primary lease contract directly. Has joint-and-several liability for both rent and damages, and possesses the legal right to occupy the premises if desired.
+  - **`LeaseGuarantorAggregate`**: Signs an independent, unilateral **Continuing Guarantee Agreement**. A guarantor holds **zero possessory tenancy rights** (cannot demand keys, entry, or access to the premises). Their obligation is purely financial: guaranteeing the tenant's payment defaults, legal fees, and physical damage obligations.
+- **Guarantor Invariants**:
+  - `LiabilityType`:
+    - `UNLIMITED_FINANCIAL`: Guarantees all lease obligations including month-to-month holdovers and lease renewal terms.
+    - `CAPPED_AMOUNT`: Financial exposure capped at a fixed maximum sum (e.g. $10,000).
+    - `TIME_BOUND`: Guarantee expires automatically after a specified milestone (e.g. after 12 consecutive on-time monthly payments).
+  - `GuarantorDemandWorkflow`: Upon tenant default past the grace period, the system generates a formal legal **Guarantor Demand Notice**, notifying the guarantor of accrued arrears before credit agency reporting or legal filings.
+
+---
+
+### 10.2 Corporate Master Leases & Rotating Authorized Occupants
+
+Enterprises, healthcare systems, embassies, and consulting firms often lease residential properties under a corporate entity to house rotating employees:
+
+```mermaid
+flowchart TD
+    CorporateObligor["Corporate Legal Obligor (LLC / Inc / Embassy)<br/>- Holds Lease Contract<br/>- Pays Master Invoices"]
+    MasterLease["Master Lease Agreement<br/>- Space: Penthouse Suite 400<br/>- Rent: $4,500/month"]
+    
+    subgraph Occupants["Rotating Authorized Occupants (Zero Contractual Liability)"]
+        Occupant1["Dr. Alice Smith (Consultant)<br/>Jan 1 - Mar 31 [CHECKED_OUT]"]
+        Occupant2["Eng. Bob Jones (Specialist)<br/>Apr 1 - Jun 30 [ACTIVE]"]
+        Occupant3["Dir. Clara Davis (Executive)<br/>Jul 1 - Dec 31 [SCHEDULED]"]
+    end
+
+    CorporateObligor --> MasterLease
+    MasterLease --> Occupant1
+    MasterLease --> Occupant2
+    MasterLease --> Occupant3
+```
+
+- **Domain Model Structure**:
+  - `CorporateObligor`: Legal company name, tax/registration identifier, authorized corporate officer signatory, dedicated corporate accounts payable contact.
+  - `AuthorizedOccupantRecord`: Individual human beings assigned to occupy the space.
+    - Properties: FullName, ContactPhone, ContactEmail, GovernmentIdVerificationHash, EmergencyContact, AssignedKeyFobId, AccessStartDate, AccessEndDate, Status (`SCHEDULED`, `ACTIVE`, `CHECKED_OUT`).
+  - **Occupant Turnover Invariant**: When an occupant departs and a replacement arrives, the underlying `LeaseAgreementAggregate` remains active and untouched. The system executes an **Occupant Rotation Event**, which revokes building access credentials for the departing occupant, issues credentials to the incoming occupant, and archives check-in condition photos without modifying billing schedules.
+
+---
+
+### 10.3 Security Deposit Replacement & Surety Insurance Programs
+
+To eliminate the friction of multi-thousand-dollar cash security deposits, Sthanori supports three interchangeable deposit structures governed by `IDepositGuaranteeStrategy`:
+
+```mermaid
+classDiagram
+    class IDepositGuaranteeStrategy {
+        <<interface>>
+        +validateDepositRequirements(lease) GuaranteeStatus
+        +processMoveOutClaim(lease, deductions) ClaimSettlementResult
+    }
+    class TraditionalEscrowDepositStrategy {
+        +validateDepositRequirements()
+        +processMoveOutClaim()
+    }
+    class ThirdPartySuretyBondStrategy {
+        +validateDepositRequirements()
+        +processMoveOutClaim()
+    }
+    class InHouseWaiverPoolStrategy {
+        +validateDepositRequirements()
+        +processMoveOutClaim()
+    }
+
+    IDepositGuaranteeStrategy <|.. TraditionalEscrowDepositStrategy
+    IDepositGuaranteeStrategy <|.. ThirdPartySuretyBondStrategy
+    IDepositGuaranteeStrategy <|.. InHouseWaiverPoolStrategy
+```
+
+1. **`TraditionalEscrowDepositStrategy`**:
+   - Renter tenders a full refundable cash deposit held in an escrow bank account.
+   - Move-out deductions reduce deposit refund.
+2. **`ThirdPartySuretyBondStrategy` (e.g. Rhino / Jetty / Obligo)**:
+   - Renter purchases a commercial surety bond or pays a monthly policy premium (e.g. $12.50/month) directly to a surety provider.
+   - Landlord receives a bond guarantee certificate up to a policy limit (e.g. $3,000).
+   - *Move-Out Claim Workflow*: When move-out damages occur, the landlord files a claim directly with the surety insurer. The insurer reimburses the landlord. Crucially, the surety retains statutory subrogation rights to collect the reimbursement directly from the tenant.
+3. **`InHouseWaiverPoolStrategy` (Landlord Self-Insurance Reserve)**:
+   - Landlord charges an optional non-refundable monthly "Security Deposit Waiver Fee" (e.g. $25/month) appended as a recurring invoice add-on.
+   - Collected fees pool into an internal **Landlord Risk Reserve**.
+   - Upon tenant move-out, unpaid damages up to a designated cap (e.g. $2,000) are absorbed directly by the landlord's risk reserve pool, forgiving the tenant's liability.
+
+
 

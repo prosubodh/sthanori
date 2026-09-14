@@ -577,6 +577,40 @@
   - **Positive**: 100% legal compliance for deposit accounting; automated dispute tracking with statutory countdowns; seamless move-in to move-out condition diffing.
   - **Trade-offs**: Requires rich checklist modeling and photo asset links.
 
+---
+
+## ADR-017: Lease Guarantors, Corporate Master Leases, and Deposit Replacement Surety Programs
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Expanding tenant financial access and enterprise client onboarding requires modeling sophisticated guarantee and corporate lease structures:
+  1. *Guarantor vs. Co-Signer Distinction*: Borderline applicants (students, international workers) require third-party credit enhancement. A Co-signer signs the lease and has full possessory rights, while a Guarantor signs an independent unilateral guarantee agreement with strictly zero tenancy/entry rights.
+  2. *Corporate Master Leases*: Corporate entities (LLCs, hospitals, embassies) contract leases to house rotating employees. The corporate entity is the legal obligor paying master bills, while rotating human occupants reside in the space with credential turnover tracking.
+  3. *Deposit Alternatives & Capital Unlocking*: Traditional multi-thousand-dollar cash deposits increase vacancy friction. Modern alternatives include commercial surety bonds (e.g. Rhino/Jetty with insurer claim submission and subrogation recovery) and in-house landlord waiver risk pools ($25/mo non-refundable fee).
+
+- **Decision**:
+  1. **New Aggregates & Value Objects**:
+     - `LeaseGuarantorAggregate`: Encapsulates guarantor profile, unilateral guarantee contract, liability terms (`UNLIMITED_FINANCIAL`, `CAPPED_AMOUNT`, `TIME_BOUND`), and statutory default demand notices (`GuarantorDemandNotice`).
+     - Corporate Lease Structure: Encapsulates `CorporateObligor` entity on `LeaseAgreementAggregate` with rotating `AuthorizedOccupantRecord` arrays and `OccupantRotationEvent` credential turnover workflows.
+  2. **Configurable Strategy Extensions**:
+     - `IDepositGuaranteeStrategy`:
+       - `TraditionalEscrowDepositStrategy` (refundable cash in escrow bank account).
+       - `ThirdPartySuretyBondStrategy` (bond certificate with insurer claims and subrogation tracking).
+       - `InHouseWaiverPoolStrategy` (non-refundable monthly waiver fee pooling into landlord risk reserve).
+  3. **Documentation Assets**:
+     - Updated [`docs/DOMAIN_ANALYSIS.md`](file:///home/prosubodh/projects/sthanori/docs/DOMAIN_ANALYSIS.md) (Section 10).
+     - Updated [`docs/BUSINESS_REQUIREMENTS.md`](file:///home/prosubodh/projects/sthanori/docs/BUSINESS_REQUIREMENTS.md) (Module 18).
+
+- **Rationale & Alternatives**:
+  - *Strategy Pattern*: Keeps surety providers behind domain ports, preventing external SDK lock-in.
+  - *Entity Segregation*: Separating possessory tenants from financial guarantors prevents unlawful eviction or unauthorized entry claims.
+
+- **Consequences**:
+  - **Positive**: Full-spectrum market readiness for student housing, corporate executive suites, and modern deposit-free residential communities; legally sound guarantee contracts.
+  - **Trade-offs**: Requires managing occupant turnover rosters and insurance claim lifecycles.
+
+
 
 
 

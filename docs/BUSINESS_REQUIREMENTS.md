@@ -153,7 +153,18 @@
 - **FR-17.5**: The system must provide automated Move-Out diffing (comparing move-out condition against move-in baseline) and feed itemized depreciated deductions directly into `SecurityDepositEscrowLedger.MoveOutSettlementStatement`.
 - **FR-17.6**: The system must support `DamageDisputeAggregate` tracking formal renter rebuttals with statutory response clocks (14–21 days) and automated credit memo adjustments.
 
+### Module 18: Lease Guarantors, Corporate Master Leases & Deposit Alternatives
+- **FR-18.1**: The system must support `LeaseGuarantorAggregate` modeling third-party financial guarantors (separate from co-signers) who hold zero tenancy/possessory rights.
+- **FR-18.2**: Guarantor agreements must support configurable liability terms: `UNLIMITED_FINANCIAL`, `CAPPED_AMOUNT`, or `TIME_BOUND`.
+- **FR-18.3**: The system must generate formal legal **Guarantor Demand Notices** upon primary resident arrears defaults.
+- **FR-18.4**: The system must support Corporate Master Leases where a legal corporate obligor holds the lease and pays invoices, while rotating authorized occupants reside in the space with credential turnover tracking.
+- **FR-18.5**: The system must support three deposit guarantee models via `IDepositGuaranteeStrategy`:
+  - `TraditionalEscrowDepositStrategy` (refundable cash held in escrow).
+  - `ThirdPartySuretyBondStrategy` (bond certificate with insurer claim submission and statutory subrogation tracking).
+  - `InHouseWaiverPoolStrategy` (non-refundable monthly waiver fee pooling into a landlord self-insurance reserve).
+
 ---
+
 
 
 
