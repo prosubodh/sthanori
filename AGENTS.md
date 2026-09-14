@@ -105,6 +105,8 @@
   - *Refresh Tokens*: Cryptographically secure rotating tokens transmitted via `HttpOnly, Secure, SameSite=Strict` cookies.
   - *Instant Revocation*: Check cryptographic token JTIs and user revocation timestamps against a fast distributed cache.
 - **Stateless Multi-Tenancy**: Resolve tenant context via request headers (`X-Tenant-ID` / `X-Tenant-Slug`) with fallback to user's personal default workspace. Verify tenant membership on every tenant route.
+- **Explicit Aggregate Root Encapsulation**: Every Domain Aggregate Root permanently encapsulates its `tenantId` as an immutable property of its identity. Entities can never exist in an orphaned or ambiguous multi-tenant state.
+- **Repository Scoping Invariant**: Repository ports strictly require `(tenantId, entityId)` on all lookups and queries. Direct single-identifier lookups (`findById(id)`) without tenant scoping are strictly forbidden at the boundary. Collaborator mocks in London School unit tests must explicitly assert tenant arguments on every interaction.
 - **REST Conventions**: Return `204 No Content` on successful deletions. Protect built-in system roles with `403 Forbidden`. Expose granular subresource endpoints for role/permission assignments. Protect auth routes with redirect guards.
 
 ---

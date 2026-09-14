@@ -104,3 +104,29 @@
 - **Consequences**:
   - **Positive**: Complete enterprise deal-readiness; rock-solid tenant lifecycle handling; zero security backdoors for support; bulletproof agent safety during bug fixes and logging.
   - **Trade-offs**: Introduces more domain states to manage during tenant status changes.
+
+---
+
+## ADR-004: Tenant Isolation via Explicit Aggregate Root Encapsulation and Scoped Repository Ports
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  In multi-tenant systems, deciding how `tenant_id` is propagated into the Domain Core represents a pivotal architectural fork:
+  1. *Ambient Context (AsyncLocalStorage / Thread-Local)*: Hides tenant identity from method signatures, but introduces significant failure risks: context leaks in promise chains, event emitters, background worker queues, and untestable implicit state in London School unit tests.
+  2. *Parameter Drilling*: Passing `tenantId` into every method across all layers adds noise and boilerplate.
+  3. *Domain Aggregate Root Encapsulation*: Making `tenantId` an immutable, permanent property of every Aggregate Root's identity.
+
+- **Decision**:
+  Adopt **Explicit Aggregate Root Encapsulation & Repository Scoping**:
+  1. Every Domain Aggregate Root permanently encapsulates its `tenantId` upon construction. Entities cannot exist in an orphaned or ambiguous multi-tenant state.
+  2. Repository ports strictly enforce `(tenantId, entityId)` on all lookups and mutations (e.g., `findById(tenantId: TenantId, id: EntityId)`). Single-identifier lookups without tenant scoping (`findById(id)`) are strictly forbidden at the port boundary.
+  3. London School Outside-In TDD unit tests must explicitly assert tenant arguments on collaborator mock verifications.
+
+- **Rationale & Alternatives**:
+  - *Alternative Considered (AsyncLocalStorage)*: Evaluated and rejected. While it reduces parameter lists, ambient context breaks down in asynchronous worker queues (`IJobQueue`), event dispatchers, and creates hidden dependencies that violate pure DI and mockist TDD principles.
+  - *Alternative Considered (Global Tenant Filters in ORM)*: Rejected because relying on magical ORM middleware leaves Domain Core ignorant of tenancy boundaries, risking cross-tenant data corruption if bypassed.
+
+- **Consequences**:
+  - **Positive**: 100% testable purity; collaborator mocks explicitly verify tenant parameters; cross-tenant query leaks are physically prevented by the type system and port contracts; works uniformly across HTTP, background jobs, CLI, and event consumers.
+  - **Trade-offs**: Repository interfaces must declare `tenantId` as the first argument in all query methods.
