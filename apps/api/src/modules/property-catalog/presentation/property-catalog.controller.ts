@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Inject,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import type {
   CreatePropertyDto,
   CreateRentableSpaceDto,
@@ -7,11 +16,14 @@ import type {
   RentableSpaceResponseDto,
   UpdateSpaceStatusDto,
 } from '@sthanori/shared';
-import type { PropertyCatalogService } from '../application/property-catalog.service';
+import { PropertyCatalogService } from '../application/property-catalog.service';
 
 @Controller('api/v1/properties')
 export class PropertyCatalogController {
-  constructor(private readonly service: PropertyCatalogService) {}
+  constructor(
+    @Inject(PropertyCatalogService)
+    private readonly service: PropertyCatalogService,
+  ) {}
 
   @Post()
   public async createProperty(
