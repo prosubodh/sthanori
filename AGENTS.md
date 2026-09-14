@@ -1,6 +1,6 @@
 # Universal Agent Rules & Operating Standard (`AGENTS.md`)
 
-> **Operating Standard**: Universal, stack-agnostic engineering protocol. Enforces relentless requirement/tool assessment, London School Outside-In TDD, interface segregation, day-1 containerization, design token theming, and strict DevSecOps guardrails.
+> **Operating Standard**: Universal, stack-agnostic engineering protocol. Enforces relentless requirement assessment, London School Outside-In TDD, interface segregation, day-1 containerization, design token theming, strict DevSecOps guardrails, and on-demand capability activation (strict YAGNI).
 
 ---
 
@@ -11,9 +11,10 @@
 - **Walking Skeleton**: Minimal end-to-end implementation verifying cross-tier connectivity before business logic.
 - **Adapter Pattern**: Wrapping third-party dependencies behind domain-owned interfaces to isolate external breaking changes.
 - **Pure DI (Dependency Injection)**: Supplying dependencies via explicit constructor/factory arguments wired at an application **Composition Root** (entrypoint). Avoids heavy reflection-based DI containers.
-- **Idempotence**: Replay-safe operations producing identical state on repeated execution (e.g., database upserts).
+- **Hexagonal Architecture (Ports & Adapters)**: Strict boundary isolation where Domain Core (zero dependencies) $\leftarrow$ Application (ports, use cases) $\leftarrow$ Adapters (infrastructure, vendors).
+- **Idempotence**: Replay-safe operations producing identical state on repeated execution (e.g., database upserts, webhook processing).
 - **DDL (Data Definition Language)**: Database schema mutations; must be version-controlled via migrations (never raw/ad-hoc).
-- **RBAC (Role-Based Access Control)**: Authorization restricting actions via roles and granular permissions.
+- **RBAC (Role-Based Access Control)**: Authorization restricting actions via user roles and granular permissions.
 - **Feature Flag / Toggle**: Dynamic runtime decision point resolving feature enablement or domain strategy based on context without redeploying code.
 - **Entitlement**: Commercial capability or quota limit granted to a tenant via their active pricing plan or contractual tier.
 - **Usage Metering**: Non-blocking, event-driven ingestion tracking consumption of quantifiable resources (API calls, storage, compute).
@@ -23,14 +24,20 @@
 - **A11y & ARIA**: Accessibility standards and Accessible Rich Internet Applications markup attributes (`role`, `aria-*`).
 - **FOUC**: Flash of Unstyled Content; eliminated via early blocking theme resolution before DOM render.
 - **DevSecOps / SAST / SBOM**: Security automation: Static Application Security Testing and Software Bill of Materials.
+- **Strict YAGNI ("You Aren't Gonna Need It")**: Absolute prohibition against scaffolding infrastructure, dependencies, or architectural ports for capabilities that have not been explicitly requested.
+- **Capability-Triggered Architecture (Just-In-Time)**: Activating specialized technical architectures (storage, queues, billing, search, real-time) only upon an explicit domain requirement or tenant contract trigger.
 
 ---
+
+# PART I: UNIVERSAL CORE INVARIANTS (Always-On Engine)
+> Non-negotiable architectural guardrails applied across **every single task, feature, service, and line of code**, regardless of domain or scale.
 
 ## 1. Operating Protocol & Cognitive Loop
 
 - **Relentless Questioning**: Never act on assumptions. Explore decision branches by asking **one clear question at a time** until all constraints, edge cases, and interfaces are resolved.
-- **Stack & Tool Assessment on Demand**: When a feature introduces new capabilities (storage, caching, queues, crypto, email, validation), relentlessly evaluate and propose the most suitable language-native tools for the active stack. Prefer standard library or established ecosystem standards; never introduce unneeded dependencies.
-- **Lightweight ADR Tracking**: Log all decisions in `memory.md` using the schema: `Date`, `Status`, `Context`, `Decision`, `Rationale & Alternatives`, `Consequences`.
+- **Zero Premature Scaffolding (Strict YAGNI)**: Before writing code or modifying configs, identify the minimal capability set required for the active prompt. Forbid introducing dependencies, Docker containers, schema tables, or mock ports for inactive capabilities.
+- **Stack & Tool Assessment on Demand**: When a feature introduces a triggered capability (storage, caching, queues, crypto, email, validation), relentlessly evaluate and propose the most suitable language-native tools for the active stack. Prefer standard library or established ecosystem standards; never introduce unneeded dependencies.
+- **Lightweight ADR Tracking**: Log all architectural decisions in `memory.md` using the schema: `Date`, `Status`, `Context`, `Decision`, `Rationale & Alternatives`, `Consequences`.
 - **5-Phase Execution Loop**:
   `[1. Assess & ADR] -> [2. Outer Acceptance Test (Red)] -> [3. Contract Discovery] -> [4. Inner TDD (Green)] -> [5. Verify & Commit]`
 - **Tiered Test Immutability**:
@@ -57,21 +64,13 @@
   4. *Domain Unit Tests*: Mock immediate domain collaborators (`Controllers/Handlers -> Services -> Adapters`).
 - **Cardinal Adapter Rule ("Only Mock Types You Own")**: Never mock third-party libraries, SDKs, ORMs, drivers, or external clients (including LaunchDarkly, Unleash, Stripe, or Paddle). Encapsulate external dependencies behind owned boundary interfaces (`IFeatureFlagPort`, `IBillingAdapter`, `IMeteringService`, `IEntitlementPort`); mock only these interfaces in unit tests.
 - **Pure Constructor DI & Composition Root**: Pass dependencies explicitly into constructors or factory functions. Assemble the dependency graph at the application Composition Root. Avoid heavy reflection/runtime DI containers unless framework-native.
-- **Automated Architecture Boundaries (Hexagonal)**: Enforce automated dependency graph linting in pre-commit/CI. Dependencies point strictly inward: Domain Core (zero dependencies) $\leftarrow$ Application (use cases + owned ports) $\leftarrow$ Adapters (infrastructure). Transport/UI calls Application. `packages/shared` must remain pure/isomorphic (no server/browser/ORM imports). Frontend and Backend workspaces may never import from each other. Zero circular dependencies allowed. Absolute ban on tenant-ID conditionals (`if (tenant.id === '...')`) in Domain Core: conflicting tenant requirements must be resolved via the Strategy Pattern, Domain Policy Factories, or Extension Hooks resolved at the application boundary.
+- **Automated Architecture Boundaries (Hexagonal)**: Enforce automated dependency graph linting in pre-commit/CI. Dependencies point strictly inward: Domain Core (zero dependencies) $\leftarrow$ Application (use cases + owned ports) $\leftarrow$ Adapters (infrastructure). Transport/UI calls Application. `packages/shared` must remain pure/isomorphic (no server/browser/ORM imports). Frontend and Backend workspaces may never import from each other. Zero circular dependencies allowed.
+- **Absolute Ban on Tenant-ID Conditionals**: Hardcoded tenant branching (`if (tenant.id === '...')`) is strictly forbidden in Domain Core. Conflicting tenant requirements must be resolved via the **Strategy Pattern**, **Domain Policy Factories**, or **Extension Hooks** resolved at the application boundary.
 - **Mandatory 100.00% Coverage Gate**: Enforce 100.00% coverage (lines, branches, functions, statements) via the stack's native coverage runner. Test all HTTP status codes (2xx, 4xx, 5xx), UI interaction states, and boundary/error edge cases.
 
 ---
 
-## 3. Asynchronous Jobs & Background Workers (YAGNI)
-
-- **Owned Queue Adapter (`IJobQueue`)**: Domain code only dispatches via `IJobQueue.enqueue()`. Never import queue drivers directly into domain or web layers.
-- **Evolutionary Runtime Topology**: Start simple with embedded execution (in-process or primary datastore). Decouple to a standalone worker process/container via `WORKER_MODE=embedded|standalone` only when workload demands it—zero domain code changes.
-- **Domain-First State Idempotency**: Verify entity state (e.g. `status !== 'PENDING'`, `sentAt !== null`) and unique constraints. Bounded retries (e.g., 3 attempts) with structured error logging on exhaustion.
-- **Zero-Flakiness Testing**: Use `InMemoryJobQueueAdapter` in unit/acceptance tests executing synchronously or via `drain()`. Forbid arbitrary `sleep()` or timeout polling. Test worker handlers as isolated domain units.
-
----
-
-## 4. Database, Migrations & State Isolation
+## 3. Database, Migrations & State Isolation
 
 - **Version-Controlled Migrations Only**: All schema alterations must be committed migration files. Direct schema pushes (`db push`) and unversioned runtime DDL are forbidden. Migration resets permitted only in dev/test.
 - **Zero-Downtime Expand & Contract**: Single-step destructive changes (dropping/renaming columns, changing types, non-null columns without defaults) are forbidden. Use the 3-phase lifecycle: (1) Expand (add nullable/default column) $\to$ (2) Dual-Write & Backfill (dual-write in app, backfill data) $\to$ (3) Contract (read new, drop deprecated in next migration).
@@ -82,7 +81,7 @@
 
 ---
 
-## 5. Security, Observability & Configuration
+## 4. Security, Observability & Baseline Configuration
 
 - **Fail-Fast Runtime & Dynamic Config**: Validate environment variables at application startup using a stack-native schema validator. Abort boot on malformed, missing, or insecure values (e.g., reject weak secrets and wildcard CORS in production). For dynamic tenant configuration and feature flags, enforce local in-memory evaluation/caching, guaranteed offline fallback defaults, and circuit-breaker degradation if external configuration providers fail.
 - **Standard Error Envelope**: Standardize all API error responses: `{ "error": string, "code": string, "requestId": string, "details"?: unknown }`. Mask 500 errors and stack traces in production. Standardize commercial error responses: `402 Payment Required` (plan upgrade required / subscription past due) and `429 Too Many Requests` (quota exhausted, including standard `Retry-After` and quota usage headers).
@@ -95,9 +94,8 @@
 
 ---
 
-## 6. Authentication, RBAC, Multi-Tenancy & SaaS Monetization
+## 5. Identity, RBAC & Stateless Multi-Tenancy Foundation
 
-### 6.1 Identity, RBAC & Stateless Multi-Tenancy
 - **Hybrid Token Lifecycle**:
   - *Access Tokens*: Short-lived (e.g., 15m), stateless tokens stored **strictly in-memory** (never in browser `localStorage`).
   - *Refresh Tokens*: Cryptographically secure rotating tokens transmitted via `HttpOnly, Secure, SameSite=Strict` cookies.
@@ -105,22 +103,9 @@
 - **Stateless Multi-Tenancy**: Resolve tenant context via request headers (`X-Tenant-ID` / `X-Tenant-Slug`) with fallback to user's personal default workspace. Verify tenant membership on every tenant route.
 - **REST Conventions**: Return `204 No Content` on successful deletions. Protect built-in system roles with `403 Forbidden`. Expose granular subresource endpoints for role/permission assignments. Protect auth routes with redirect guards.
 
-### 6.2 Feature Flagging, Dynamic Tenant Strategies & Conflicting Requests
-- **Owned Feature Flag Port (`IFeatureFlagPort`)**: Domain and application layers evaluate flags solely via an owned interface (matching OpenFeature evaluation semantics). Third-party SDKs (LaunchDarkly, Unleash, etc.) are isolated strictly inside `*.adapter.*`.
-- **Zero-Tolerance on Tenant-ID Branching**: Hardcoded tenant branching (`if (tenantId === '...')`) is strictly forbidden in Domain Core. Tenant-specific variations must be resolved via the **Strategy Pattern** or **Domain Policy Factories** wired at the application layer.
-- **Evaluation Context & Fallbacks**: Flag evaluations must pass a structured `EvaluationContext` (`tenantId`, `userId`, `tier`, `attributes`). Providers must maintain local in-memory evaluation or aggressive caching with guaranteed offline fallback defaults.
-- **Lifecycle & Pruning Discipline**: Every flag must be typed (`release`, `experiment`, `entitlement`, `ops`) and tagged with an expiration/owner. Release flags must be removed within 1 cycle of full rollout; existing regression tests must lock default flag values.
-
-### 6.3 SaaS Monetization: Pricing Models, Entitlements & Metered Quotas
-- **Decoupled Entitlement Enforcement**: Strictly separate RBAC (user permissions) from Entitlements (tenant plan capabilities). Evaluate entitlements via `IEntitlementPort.canAccess(tenantId, featureKey)` before executing restricted domain operations.
-- **Owned Billing Adapter (`IBillingAdapter`)**: All commercial integrations (subscriptions, invoices, checkout sessions, customer portal) must be wrapped in an owned adapter. Never mock or expose third-party billing SDKs (Stripe, Paddle) to domain logic.
-- **Non-Blocking Asynchronous Metering (`IMeteringService`)**: Ingest usage events asynchronously via `IJobQueue` or out-of-band telemetry pipelines. Never execute synchronous billing API calls or heavy database writes on the hot request path.
-- **High-Throughput Quota Enforcement**: Atomic quota counters (e.g. Redis sliding window or token bucket) protect datastores from row lock contention. Support both **Hard Limits** (`429 Too Many Requests` with `Retry-After`) and **Soft Limits** (overage tracking and billing event dispatching).
-- **Subscription Webhook Ledger & Grace Periods**: Webhooks (`invoice.payment_failed`, `customer.subscription.updated`) must be verified via timing-safe HMAC, processed idempotently through an event ledger, and drive subscription state machines with configurable grace periods before downgrading tenant access.
-
 ---
 
-## 7. Frontend Architecture, Design Tokens, Theming & A11y (Design Pro Max)
+## 6. Frontend Architecture, Design Tokens, Theming & A11y (Design Pro Max)
 
 - **Foundation & Intentional Visual Archetype**: Lock in UI framework, CSS strategy (utility-first, CSS Modules, or modern zero-runtime CSS), typography scale, and layout primitives at project inception. Reject generic "vibecoded" templates; select an intentional aesthetic archetype (Clean Enterprise SaaS, Bento Grid, High-Density Data Canvas) matching the product domain.
 - **Design Intelligence & Mathematical Harmony**:
@@ -150,16 +135,7 @@
 
 ---
 
-## 8. Direct-to-Storage Object Architecture & Tenant File Security
-
-- **Pre-Signed Direct Uploads**: Never stream or buffer binary file uploads through application web servers. Clients request short-lived pre-signed upload URLs (`POST /api/uploads/presign`) with MIME and byte-size limits validated upfront; clients upload directly to object storage.
-- **S3 Local Parity (Day 1)**: Provision an S3-compatible store (e.g., MinIO) in Docker Compose from day one for 100% development and E2E testing parity without cloud credentials.
-- **Storage Adapter (`IStorageAdapter`)**: All storage interactions (signed URLs, delete, download) are wrapped in an owned adapter. Offload heavy media processing (resizing, virus scans) to background workers (`IJobQueue`).
-- **Public vs. Private Segregation & RBAC Downloads**: Public assets (avatars) served via CDN with immutable cache. Private assets (invoices, sensitive docs) stored in private buckets with public access disabled. Downloads require short-lived (5–15m) pre-signed download URLs guarded by tenant context and RBAC permissions (`requirePermission`). Storage keys must be tenant-partitioned (`tenants/<tenantId>/<resource>/<uuid>.<ext>`).
-
----
-
-## 9. Containerization, DevSecOps & CI/CD Discipline
+## 7. Containerization, DevSecOps & CI/CD Discipline
 
 - **Dockerize From Day 1**:
   - Establish multi-stage Dockerfiles and container orchestration (Docker Compose) on the initial commit.
@@ -174,3 +150,152 @@
   - Enforce Conventional Commits (`feat:`, `fix:`, `chore:`, `test:`, `refactor:`, `ci:`) via commit hooks. Never use `--no-verify`.
   - Full suite verification (typecheck, lint, secret scan, 100% test coverage) must pass before pushing code.
 
+---
+
+# PART II: TRIGGERED CAPABILITY MODULES (On-Demand Architecture)
+> Activated **IF AND ONLY IF** a domain requirement or tenant request explicitly demands that capability. If a capability is inactive, **zero code, infrastructure, or mock ports may be scaffolded**.
+
+---
+
+## 8. Capability: Binary Object Storage & Tenant File Security
+- **Trigger**: Domain requirement involves binary assets, file uploads, avatars, attachments, or document exports.
+- **Strict YAGNI**: If no file upload/retrieval is required, do NOT provision object storage containers or write storage adapters.
+- **Architecture Protocol (When Triggered)**:
+  - **Pre-Signed Direct Uploads**: Never stream or buffer binary file uploads through application web servers. Clients request short-lived pre-signed upload URLs (`POST /api/uploads/presign`) with MIME and byte-size limits validated upfront; clients upload directly to object storage.
+  - **S3 Local Parity**: Provision an S3-compatible store (e.g., MinIO) in Docker Compose only once storage is required.
+  - **Storage Adapter (`IStorageAdapter`)**: All storage interactions (signed URLs, delete, download) are wrapped in an owned adapter. Offload heavy media processing (resizing, virus scans) to background workers (`IJobQueue`).
+  - **Public vs. Private Segregation & RBAC Downloads**: Public assets (avatars) served via CDN with immutable cache. Private assets (invoices, sensitive docs) stored in private buckets with public access disabled. Downloads require short-lived (5–15m) pre-signed download URLs guarded by tenant context and RBAC permissions (`requirePermission`). Storage keys must be tenant-partitioned (`tenants/<tenantId>/<resource>/<uuid>.<ext>`).
+
+---
+
+## 9. Capability: Asynchronous Background Jobs & Queues
+- **Trigger**: Operations exceeding synchronous HTTP request SLAs (>500ms), long-running batch processing, media transcoding, or scheduled tasks.
+- **Strict YAGNI**: If all business logic executes within sub-second synchronous request lifecycles, do NOT introduce queue drivers or worker containers.
+- **Architecture Protocol (When Triggered)**:
+  - **Owned Queue Adapter (`IJobQueue`)**: Domain code only dispatches via `IJobQueue.enqueue()`. Never import queue drivers directly into domain or web layers.
+  - **Evolutionary Runtime Topology**: Start simple with embedded execution (in-process or primary datastore). Decouple to a standalone worker process/container via `WORKER_MODE=embedded|standalone` only when workload demands it—zero domain code changes.
+  - **Domain-First State Idempotency**: Verify entity state (e.g. `status !== 'PENDING'`, `sentAt !== null`) and unique constraints. Bounded retries (e.g., 3 attempts) with structured error logging on exhaustion.
+  - **Zero-Flakiness Testing**: Use `InMemoryJobQueueAdapter` in unit/acceptance tests executing synchronously or via `drain()`. Forbid arbitrary `sleep()` or timeout polling. Test worker handlers as isolated domain units.
+
+---
+
+## 10. Capability: Multi-Tenant Feature Divergence & Conflicting Workflows
+- **Trigger**: Conflicting tenant requirements, divergent business rules, compliance variations, or experimental feature releases.
+- **Strict YAGNI**: If all tenants share uniform domain behavior, do NOT introduce complex dynamic feature flag systems.
+- **Architecture Protocol (When Triggered)**:
+  - **Owned Feature Flag Port (`IFeatureFlagPort`)**: Domain and application layers evaluate flags solely via an owned interface (matching OpenFeature evaluation semantics). Third-party SDKs (LaunchDarkly, Unleash, etc.) are isolated strictly inside `*.adapter.*`.
+  - **Zero-Tolerance on Tenant-ID Branching**: Hardcoded tenant branching (`if (tenantId === '...')`) is strictly forbidden in Domain Core. Tenant-specific variations must be resolved via the **Strategy Pattern** or **Domain Policy Factories** wired at the application layer.
+  - **Evaluation Context & Fallbacks**: Flag evaluations must pass a structured `EvaluationContext` (`tenantId`, `userId`, `tier`, `attributes`). Providers must maintain local in-memory evaluation or aggressive caching with guaranteed offline fallback defaults.
+  - **Lifecycle & Pruning Discipline**: Every flag must be typed (`release`, `experiment`, `entitlement`, `ops`) and tagged with an expiration/owner. Release flags must be removed within 1 cycle of full rollout; existing regression tests must lock default flag values.
+
+---
+
+## 11. Capability: SaaS Monetization, Commercial Entitlements & Metered Quotas
+- **Trigger**: Product monetization, subscription tiers, seat limits, paywalled modules, or metered usage billing.
+- **Strict YAGNI**: If the application is open-access, internally hosted, or non-commercial, do NOT introduce payment gateways or metering queues.
+- **Architecture Protocol (When Triggered)**:
+  - **Decoupled Entitlement Enforcement**: Strictly separate RBAC (user permissions) from Entitlements (tenant plan capabilities). Evaluate entitlements via `IEntitlementPort.canAccess(tenantId, featureKey)` before executing restricted domain operations.
+  - **Owned Billing Adapter (`IBillingAdapter`)**: All commercial integrations (subscriptions, invoices, checkout sessions, customer portal) must be wrapped in an owned adapter. Never mock or expose third-party billing SDKs (Stripe, Paddle) to domain logic.
+  - **Non-Blocking Asynchronous Metering (`IMeteringService`)**: Ingest usage events asynchronously via `IJobQueue` or out-of-band telemetry pipelines. Never execute synchronous billing API calls or heavy database writes on the hot request path.
+  - **High-Throughput Quota Enforcement**: Atomic quota counters (e.g. Redis sliding window or token bucket) protect datastores from row lock contention. Support both **Hard Limits** (`429 Too Many Requests` with `Retry-After`) and **Soft Limits** (overage tracking and billing event dispatching).
+  - **Subscription Webhook Ledger & Grace Periods**: Webhooks (`invoice.payment_failed`, `customer.subscription.updated`) must be verified via timing-safe HMAC, processed idempotently through an event ledger, and drive subscription state machines with configurable grace periods before downgrading tenant access.
+
+---
+
+## 12. Capability: High-Performance Caching & Distributed Locking
+- **Trigger**: Hot-path read bottlenecks, expensive recalculations, distributed session revocation, or distributed locking.
+- **Strict YAGNI**: Do NOT provision Redis or caching layers until database read metrics demonstrate clear latency or contention bottlenecks.
+- **Architecture Protocol (When Triggered)**:
+  - **Owned Cache Port (`ICachePort`)**: Wrap cache drivers behind an owned boundary. Domain Core never calls cache directly.
+  - **Evolutionary Progression**: In-process memory cache first $\to$ dedicated distributed cache (Redis, KeyDB) when horizontal scaling requires shared cache state.
+  - **Explicit Invalidation & Resilience**: Mandate explicit cache invalidation strategies (write-through or stale-while-revalidate with jittered TTL). Circuit-break cache calls: cache misses or outages must transparently fall back to source datastores without downtime.
+
+---
+
+## 13. Capability: Full-Text Search & Complex Filtering
+- **Trigger**: Natural-language text search, fuzzy matching, typo tolerance, or faceted filtering across large corpora.
+- **Strict YAGNI**: Do NOT spin up search engines for simple exact-match relational queries.
+- **Architecture Protocol (When Triggered)**:
+  - **Owned Search Port (`ISearchPort`)**: Application domain dispatches search queries and indexing requests solely via `ISearchPort`.
+  - **Relational First**: Leverage relational full-text capabilities (e.g., PostgreSQL `tsvector` with GIN indexes) before introducing external search clusters.
+  - **Decoupled External Engine**: Migrate to an external engine (Elasticsearch, Meilisearch) only when scale, typo tolerance, or scoring algorithms require it. Reindex asynchronously via `IJobQueue`.
+
+---
+
+## 14. Capability: Transactional Outbound Communications (Email / SMS / Push)
+- **Trigger**: Domain events requiring external user notifications (invites, password resets, verification codes, system alerts).
+- **Strict YAGNI**: If domain operations do not notify external channels, do NOT introduce email drivers or mail services.
+- **Architecture Protocol (When Triggered)**:
+  - **Owned Notification Port (`INotificationPort` / `IEmailAdapter`)**: Encapsulate transactional email providers (Resend, SendGrid, Postmark) behind an owned interface.
+  - **Decoupled Templating & Async Dispatch**: Templates reside in application/infrastructure layers, rendered with strongly typed view models. Dispatch occurs asynchronously via `IJobQueue` to avoid HTTP thread blocking.
+  - **Local Development Parity**: Provision an in-memory local mail catcher (e.g., Mailpit) in Docker Compose so tests and local development capture emails without external credentials.
+
+---
+
+## 15. Capability: Live Real-Time Events & Streaming
+- **Trigger**: Real-time collaborative editing, live dashboards, instant status feeds, or progress streaming.
+- **Strict YAGNI**: If polling or standard request/response cycles satisfy user requirements, do NOT introduce persistent socket connections.
+- **Architecture Protocol (When Triggered)**:
+  - **Owned Realtime Port (`IRealtimePort`)**: Encapsulate streaming mechanisms behind domain event subscriptions.
+  - **SSE-First Evolution**: Default to Server-Sent Events (SSE) over HTTP for unidirectional server-to-client streaming. Adopt WebSockets only when sub-100ms bidirectional message exchange is explicitly required.
+  - **Connection Auth & Heartbeats**: Authenticate socket/stream connections via initial handshake token validation. Enforce connection heartbeats, automatic client reconnect with exponential backoff, and tenant-partitioned channel access.
+
+---
+
+## 16. Capability: Outbound Webhooks & Integration Events
+- **Trigger**: Enterprise tenants require subscribing external systems to platform domain events (e.g., Zapier, custom tenant webhooks).
+- **Strict YAGNI**: Do NOT build outbound webhook infrastructure for internal-only monoliths.
+- **Architecture Protocol (When Triggered)**:
+  - **Cryptographic Signing**: Every outbound webhook payload must include a cryptographic HMAC-SHA256 signature header (`X-Signature-SHA256`) generated using a tenant-specific webhook secret.
+  - **Reliable Dispatch Pipeline**: Webhook delivery must run asynchronously via `IJobQueue` with exponential backoff retries, configurable delivery timeouts ($\le$ 5s), and dead-letter quarantine after terminal failure.
+  - **Idempotency & Event Nonces**: Outbound payloads include unique event nonces (`event_id`) and timestamps to protect tenant receivers against replay attacks.
+
+---
+
+## 17. Capability: Data Tenancy Isolation Tiers & Compliance
+- **Trigger**: Enterprise tenant contractual mandates for physical or logical database separation (e.g., SOC2, HIPAA, banking).
+- **Strict YAGNI**: Default to shared database with tenant partitioning. Do NOT implement complex multi-database routing unless contractually mandated.
+- **Architecture Protocol (When Triggered)**:
+  - **Tiered Isolation Strategy**:
+    - *Pooled (Default)*: Shared database with strict Row-Level Security (RLS) and automatic tenant context injection (`SET LOCAL app.current_tenant_id = '...'`).
+    - *Silo (Enterprise Tier)*: Dedicated schema-per-tenant or database-per-tenant resolved via a dynamic connection routing factory at the application boundary.
+  - **Migration Automation**: Version-controlled migrations must run idempotently across all active tenant schemas or databases in parallel during CI/CD pipelines.
+
+---
+
+## 18. Capability: Immutable Tenant Audit Trail
+- **Trigger**: B2B compliance requirements (SOC2, ISO27001, HIPAA) to maintain an audit trail of user actions, administrative mutations, and permission changes.
+- **Strict YAGNI**: Do NOT confuse ephemeral stdout operational logs with compliance audit trails.
+- **Architecture Protocol (When Triggered)**:
+  - **Tamper-Evident Audit Ledger**: Audit entries (`id`, `tenant_id`, `actor_id`, `action`, `resource_type`, `resource_id`, `state_diff`, `ip_address`, `timestamp`) are append-only.
+  - **Strict Immutability**: Forbid `UPDATE` or `DELETE` operations on audit tables via database triggers or WORM (Write-Once-Read-Many) policies.
+  - **Decoupled Ingestion**: Record audit events asynchronously to avoid impacting domain transaction commit latency. Expose queryable, tenant-scoped audit search endpoints for tenant administrators.
+
+---
+
+## 19. Capability: Internationalization (i18n), Localization (l10n) & Multi-Currency
+- **Trigger**: Product supports multi-lingual users, global regions, or multi-currency pricing.
+- **Strict YAGNI**: Do NOT introduce translation dictionaries or currency converters for single-region applications.
+- **Architecture Protocol (When Triggered)**:
+  - **Decoupled Translation Keys**: Domain models and UI components store semantic translation keys; translations live in localized dictionaries loaded dynamically.
+  - **Context Resolution**: Resolve user locale via `Accept-Language` header, tenant organization preference, or explicit user profile settings with graceful fallback.
+  - **Currency Representation**: Store monetary values strictly as integers in the lowest minor currency unit (e.g. cents) alongside a standard ISO-4217 currency code. Never use floating-point arithmetic for currency calculations.
+
+---
+
+## 20. Capability: Tenant Custom Domains & Vanity White-Labeling
+- **Trigger**: Enterprise tenants require hosting their workspace on a custom domain (e.g., `portal.customer.com`) with bespoke branding.
+- **Strict YAGNI**: Do NOT build dynamic domain routing or custom certificate automation for standard subpath applications.
+- **Architecture Protocol (When Triggered)**:
+  - **Host & SNI Tenant Resolution**: Edge reverse proxy maps incoming `Host` header to tenant context, verifying verified custom domain ownership via DNS TXT challenges.
+  - **Automated SSL**: Provision and renew Let's Encrypt TLS certificates dynamically at the reverse-proxy layer.
+  - **Dynamic Theme Injection**: Serve tenant branding tokens (`--tenant-brand-primary`, `--tenant-logo`) in the initial HTML blocking script to eliminate visual flash on custom domains.
+
+---
+
+## 21. Capability: Tenant Data Portability & GDPR Deletion
+- **Trigger**: Tenant account termination, data export requests, or GDPR "Right to be Forgotten" erasure mandates.
+- **Strict YAGNI**: Do NOT implement export archiving engines until tenant self-service or compliance mandates require it.
+- **Architecture Protocol (When Triggered)**:
+  - **Asynchronous Export Generation**: Full tenant exports (relational data in JSON/CSV + binary assets) run as background batch jobs via `IJobQueue`, delivering a temporary signed download link to the tenant admin.
+  - **Cryptographic Cascade Erasure**: Deletion requests execute a deterministic cascade: soft-delete with grace period $\to$ permanent cryptographic purging of relational rows, cache keys, audit logs, and object storage partitions.

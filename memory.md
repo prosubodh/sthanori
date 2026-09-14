@@ -39,3 +39,36 @@
 - **Consequences**:
   - **Positive**: Domain Core remains 100% pure and decoupled from external tenant IDs and vendor billing SDKs; London School TDD can mock owned interfaces cleanly; test suites remain green by locking default flag states; multi-tenant systems can scale across conflicting customer requirements cleanly; UI achieves professional aesthetic distinction and accessibility.
   - **Trade-offs**: Requires establishing strategy factories and owned adapter implementations up-front; requires Redis or fast atomic cache infrastructure for high-throughput quota tracking.
+
+---
+
+## ADR-002: Bipartite Operating Standard: Universal Core Invariants and On-Demand Triggered Capability Modules (Strict YAGNI)
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Operating standards for autonomous AI coding agents often suffer from a fundamental failure mode: treating specialized technical capabilities (e.g. S3/MinIO object storage, asynchronous worker queues, metered billing, full-text search clusters, real-time WebSockets) as mandatory "Day-1" scaffolding regardless of the actual user task. When an agent is instructed to build a simple JWT authentication endpoint or an in-memory calculation engine, an unconditional operating standard leads the agent to provision MinIO, configure BullMQ/Celery workers, and scaffold billing adapters. This violates YAGNI (You Aren't Gonna Need It), inflates Docker footprint, bloats the codebase, and increases cognitive overhead.
+
+- **Decision**:
+  Restructure `AGENTS.md` into a formal **Two-Tier Architecture**:
+  1. **Part I: Universal Core Invariants (Always-On Engine)**:
+     - London School Outside-In TDD (Mockist double-loop).
+     - Hexagonal Architecture Boundaries & Pure Constructor DI.
+     - Cardinal Adapter Rule ("Only Mock Types You Own").
+     - Zero-Tolerance Type & Config Guardrails (No `any`, 100.00% coverage gate).
+     - Tiered Test Immutability.
+     - Fail-Fast Startup Runtime Config.
+     - Stateless Multi-Tenancy Identity (`X-Tenant-ID`) & Absolute Ban on Tenant-ID Branching in Domain Core (`if (tenant.id === '...')`).
+     - Docker Parity & DevSecOps (Non-root containers, unified reverse proxy port 80, secret scanning, conventional commits).
+  2. **Part II: Triggered Capability Modules (Just-In-Time / On-Demand)**:
+     - Formally define 14 specialized capability modules: (1) Object Storage, (2) Background Workers, (3) Tenant Feature Divergence & Conflicts, (4) SaaS Monetization & Quotas, (5) Caching & Distributed Locking, (6) Full-Text Search, (7) Transactional Communications, (8) Real-Time Streaming, (9) Outbound Webhooks, (10) Data Tenancy Tiers, (11) Immutable Audit Trail, (12) i18n & Multi-Currency, (13) Custom Domains & Vanity White-Labeling, and (14) Tenant Data Portability & GDPR Deletion.
+     - Each module defines an explicit **Activation Trigger**, a **Strict YAGNI** negative constraint (prohibiting premature scaffolding if unrequested), and the **Exact Architecture Protocol** when triggered.
+
+- **Rationale & Alternatives**:
+  - *Alternative Considered (Monolithic Checklist)*: Keeping all capabilities as flat rules in `AGENTS.md` was rejected because AI agents interpret flat rules as universal mandates, resulting in premature infrastructure scaffolding.
+  - *Alternative Considered (Dynamic Plugin Architecture)*: Keeping capabilities in external documentation was rejected because agents need a single source of truth in `AGENTS.md` that is always in context.
+  - *Chosen Approach*: The bipartite model preserves 100% rigor for universal invariants while establishing strict Just-In-Time discipline for feature-specific capabilities.
+
+- **Consequences**:
+  - **Positive**: Eliminates premature scaffolding; ensures clean, minimal codebases; keeps container footprint minimal; establishes clear, repeatable protocols for every specialized capability when requested by tenants; completely protects Domain Core purity.
+  - **Trade-offs**: Requires the agent to execute a Capability Discovery step during the Cognitive Loop prior to writing code or modifying container configurations.
