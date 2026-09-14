@@ -245,3 +245,45 @@
 - **Consequences**:
   - **Positive**: Complete portability across tech stacks; rock-solid architectural foundations; prevents abstraction hell in enterprise customization; aligns mockist TDD with classical engineering rigor.
   - **Trade-offs**: Requires discipline to resist combining similar-looking tenant strategies prematurely.
+
+---
+
+## ADR-009: Twelve-Factor App Methodology and Modern 2026 Cloud-Native Alignment (15-Factor Standard)
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  The Twelve-Factor App methodology (originated in 2011) remains the canonical benchmark for building scalable, portable, resilient Software-as-a-Service applications. Over the past 15 years, modern cloud-native practice has extended these principles into the **15-Factor App** (or "Beyond the Twelve-Factor App"), incorporating critical distributed concerns such as API-First contracts, end-to-end Telemetry & Observability, and Zero-Trust Authentication & Authorization.
+  A thorough audit of `AGENTS.md` revealed that while many of these factors were already active (container parity, health probes, RED metrics, multi-tenancy, outside-in TDD), several essential cloud-native production invariants needed explicit codification:
+  1. **Disposability & Graceful Shutdown (Factor IX)**: Dynamic cloud environments (Kubernetes, Nomad, Cloud Run) scale and redeploy containers constantly. Without explicit `SIGTERM`/`SIGINT` signal interception, readiness probe failure (`/readyz` $\to$ 503), bounded in-flight request/job draining (15–30s), and clean connection pool teardown, rolling deployments drop active user connections and corrupt asynchronous worker tasks.
+  2. **Config vs. Secrets Segregation (Factor III & XV)**: Plain environment variables are insufficient for enterprise security. Non-sensitive operational configuration must be strictly separated from sensitive credentials, certificates, and keys; secrets must be injected from secure vaults/stores and scrubbed from traces, memory dumps, and logs.
+  3. **Event-Stream Logging (Factor XI)**: Applications must never manage log files, rotation, or transport. Structured JSON must stream directly to `stdout`/`stderr` as unbuffered event streams.
+  4. **Strict Build, Release, Run Separation (Factor V)**: Builds create immutable container images; releases combine image and environment configuration; production containers are 100% immutable (no hot-patching).
+  5. **Attached Backing Services & Stateless Processes (Factors IV, VI, VII, VIII, XII)**: Stateless share-nothing processes, ephemeral scratchpad disk, attached backing services referenced dynamically via environment URIs, port-bound listeners, and ephemeral one-off admin jobs (migrations, backfills).
+
+- **Decision**:
+  Explicitly formalize and codify the complete 12-Factor + 15-Factor Cloud-Native Architecture Standard in `AGENTS.md`:
+  - **Factor I (Codebase)**: Single revision-controlled repository with many environment deploys (`AGENTS.md` Section 1 & 7).
+  - **Factor II (Dependencies)**: Explicitly declared, isolated, containerized from Day 1, CycloneDX SBOM generation (`AGENTS.md` Section 7).
+  - **Factor III (Config & Secrets)**: Externalized in environment, startup schema validation, secrets segregation from general config (`AGENTS.md` Section 4).
+  - **Factor IV (Backing Services)**: Attached resources referenced via environment URIs, wrapped behind owned hexagonal adapters (`AGENTS.md` Section 2 & 7).
+  - **Factor V (Build, Release, Run)**: Strict 3-stage separation, immutable container images, zero production patching (`AGENTS.md` Section 7).
+  - **Factor VI (Processes)**: Stateless, share-nothing processes; local filesystem is strictly ephemeral scratchpad (`AGENTS.md` Section 5 & 7).
+  - **Factor VII (Port Binding)**: Self-contained services bound to explicit ports; local reverse proxy on port 80 (`AGENTS.md` Section 7).
+  - **Factor VIII (Concurrency)**: Scale horizontally via the process model (web vs worker processes) (`AGENTS.md` Section 7 & 9).
+  - **Factor IX (Disposability & Graceful Shutdown)**: Fast startup (<3s), `SIGTERM`/`SIGINT` signal trapping, `/readyz` 503 cut-off, bounded 15–30s in-flight request/job draining, clean pool disposal (`AGENTS.md` Section 4).
+  - **Factor X (Dev/Prod Parity)**: Day-1 container parity across datastores and application runtimes (`AGENTS.md` Section 7).
+  - **Factor XI (Logs as Event Streams)**: Unbuffered structured JSON to `stdout`/`stderr`, no in-app logfile rotation (`AGENTS.md` Section 4).
+  - **Factor XII (Admin Processes)**: Ephemeral one-off jobs (migrations, seeds) using the identical release container image and environment (`AGENTS.md` Section 3 & 7).
+  - **Factor XIII (API First)**: Schema-driven API contracts (OpenAPI, gRPC reflection) generated directly from code schemas (`AGENTS.md` Section 4).
+  - **Factor XIV (Telemetry & Observability)**: RED metrics (`/metrics`), W3C `traceparent` OpenTelemetry tracing, decoupled health probes (`/healthz`, `/readyz`, `/startup`) (`AGENTS.md` Section 4).
+  - **Factor XV (Zero-Trust Security & Identity)**: Built-in token lifecycles, JTI revocation, least-privilege RBAC, multi-tenant row isolation (RLS), pre-commit secret scanning (`AGENTS.md` Section 1, 4, 5).
+
+- **Rationale & Alternatives**:
+  - *Alternative Considered (Implicit Assumption of 12-Factor)*: Evaluated and rejected. When standards do not explicitly prescribe graceful shutdown or secret segregation, autonomous agents and developers routinely implement abruptly exiting processes, log to local files, and hardcode connection strings, causing severe production regressions.
+  - *Alternative Considered (Legacy 2011 12-Factor Only)*: Rejected because modern containerized ecosystems require API contracts, distributed tracing, and built-in Zero-Trust security as universal day-1 concerns.
+
+- **Consequences**:
+  - **Positive**: Complete cloud-native resilience; zero dropped requests during rolling deploys or autoscaling; clean dev/prod parity; leak-free secret management; full auditability and observability; applications are immediately production-ready for Kubernetes, ECS, Cloud Run, or Nomad.
+  - **Trade-offs**: Requires wiring process signal handlers and shutdown hooks at the application Composition Root.
+

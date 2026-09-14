@@ -31,6 +31,8 @@
 - **Stack Agnosticism & Reference Parity**: Protocol is 100% stack-, language-, and framework-neutral. References to specific tools (PostgreSQL, Redis, MinIO) represent canonical local dev reference implementations, not mandatory technology lock-in.
 - **Strict YAGNI ("You Aren't Gonna Need It")**: Absolute prohibition against scaffolding infrastructure, dependencies, or architectural ports for capabilities that have not been explicitly requested.
 - **Capability-Triggered Architecture (Just-In-Time)**: Activating specialized technical architectures (storage, queues, billing, search, real-time) only upon an explicit domain requirement or tenant contract trigger.
+- **Twelve-Factor & Fifteen-Factor App (Modern Cloud-Native Standard)**: Architecture methodology optimizing cloud portability, horizontal scalability, and resilience (Codebase, Dependencies, Config & Secrets, Attached Backing Services, Build/Release/Run, Stateless Processes, Port Binding, Concurrency, Disposability & Graceful Shutdown, Dev/Prod Parity, Event-Stream Logs, Ephemeral Admin Tasks + modern extensions: API First, Telemetry & Observability, Zero-Trust Security).
+- **Disposability & Graceful Shutdown**: Process robustness ensuring fast startup (<3s) and graceful termination via `SIGTERM`/`SIGINT` signal trapping, readiness probe failure, in-flight request/job draining, and clean connection pool disposal.
 
 ---
 
@@ -98,14 +100,18 @@
 
 ## 4. Security, Observability & Baseline Configuration
 
-- **Fail-Fast Runtime & Dynamic Config**: Validate environment variables at application startup using a stack-native schema validator. Abort boot on malformed, missing, or insecure values (e.g., reject weak secrets and wildcard CORS in production). For dynamic tenant configuration and feature flags, enforce local in-memory evaluation/caching, guaranteed offline fallback defaults, and circuit-breaker degradation if external configuration providers fail.
+- **Fail-Fast Runtime, Secrets & Dynamic Config (12-Factor Config)**: Validate all configuration and environment variables at application startup using a stack-native schema validator. Abort boot immediately on malformed, missing, or insecure values (e.g., reject weak secrets and wildcard CORS in production). Strictly segregate non-sensitive operational configuration from sensitive credentials and private keys. Secrets must be injected via secure secret managers or encrypted environment injection, never committed to revision control, and masked in logs, traces, and process dumps. For dynamic tenant configuration and feature flags, enforce local in-memory evaluation/caching, guaranteed offline fallback defaults, and circuit-breaker degradation if external configuration providers fail.
+- **Disposability & Graceful Shutdown (SIGTERM/SIGINT)**: Processes must maximize robustness through fast startup (<3s) and graceful termination. Applications must trap termination signals (`SIGTERM`, `SIGINT`):
+  1. Immediately fail readiness checks (`/readyz` returns 503) so ingress proxies and service meshes detach traffic without dropping requests.
+  2. Allow in-flight HTTP requests and active background worker jobs to complete within a bounded drain period (e.g. 15–30s).
+  3. Close database connection pools, cache clients, message brokers, and socket listeners cleanly before terminating with exit code 0.
+- **Event-Stream Logs & Correlation Tracing (12-Factor Logs & Telemetry)**: Treat logs as unbuffered event streams emitted directly to `stdout`/`stderr` formatted as structured JSON. Application code must never manage log files, rotation, or shipping (delegated to runtime infrastructure). Tag all requests with `x-request-id`. Propagate correlation IDs across structured JSON logging, distributed OpenTelemetry trace attributes (`traceparent`), and domain service audit events.
 - **Standard Error Envelope**: Standardize all API error responses: `{ "error": string, "code": string, "requestId": string, "details"?: unknown }`. Mask 500 errors and stack traces in production. Standardize commercial error responses: `402 Payment Required` (plan upgrade required / subscription past due) and `429 Too Many Requests` (quota exhausted, including standard `Retry-After` and quota usage headers).
 - **Outbound Resilience & Circuit Breakers**: Mandatory strict timeouts (connect $\le$ 2s, read $\le$ 5s). Exponential backoff with randomized jitter on transient failures (429, 5xx, socket drops). Circuit breakers fail fast on error threshold (e.g., 5 failures over 10s) with owned fallbacks.
 - **Inbound Idempotency & Secure Webhooks**: Mutating endpoints support `Idempotency-Key` header, replaying cached responses on duplicates. Inbound webhooks require timing-safe signature verification (HMAC-SHA256), replay tolerance window ($\le$ 5m), and idempotent event ledgers.
 - **Decoupled Health Probes (No Restart Spirals)**: Liveness (`/healthz`) tests shallow process responsiveness only (never queries DB/cache; failure restarts container). Readiness (`/readyz`) tests live datastore connectivity (failure returns 503, removing pod from load balancer routing without restart). Startup probe (`/startup`) guards cold migrations.
 - **Prometheus RED Metrics & OpenTelemetry**: Expose RED metrics (Rate, Errors, Duration p50/p95/p99 histograms) on internal/protected `/metrics`. Track process telemetry (memory, event loop lag). Standardize W3C `traceparent` headers for distributed tracing correlated with `x-request-id`.
-- **Correlation Tracing & Structured Logs**: Tag requests with `x-request-id`. Propagate correlation IDs across structured JSON logging and domain service audit events.
-- **Schema-Driven API Docs**: Generate API specifications (OpenAPI, gRPC reflection) directly from code schemas; never maintain decoupled manual documentation.
+- **API-First & Schema-Driven Docs**: Enforce API-first discipline. Generate API specifications (OpenAPI, gRPC reflection, AsyncAPI) directly from code schemas; never maintain decoupled manual documentation. Validate request/response payloads against generated schemas.
 
 ---
 
@@ -154,11 +160,22 @@
 
 ## 7. Containerization, DevSecOps & CI/CD Discipline
 
-- **Dockerize From Day 1**:
+- **Dockerize From Day 1 & Port Binding (12-Factor Port Binding & Dev/Prod Parity)**:
   - Establish multi-stage Dockerfiles and container orchestration (Docker Compose) on the initial commit.
+  - Export services via explicit, self-contained port binding (web processes bind to stack-native HTTP/gRPC ports defined via environment variables).
   - Container parity: All datastores, applications, workers, and ingress reverse proxies run in containers across dev and prod.
   - Route local services through a unified reverse proxy/gateway (port 80) to eliminate port sprawl and cross-origin friction.
   - Run all production containers as unprivileged, non-root users. Accelerate builds with BuildKit cache mounts and `.dockerignore`.
+- **Stateless Processes, Ephemeral Filesystems & Attached Backing Services (12-Factor Processes & Concurrency)**:
+  - Execute application services as one or more stateless, share-nothing processes. Concurrency is scaled horizontally by spawning process instances (web vs. worker processes).
+  - Local process filesystems are strictly ephemeral scratch pads; any state that requires persistence must be stored in attached backing services.
+  - Treat all backing services (relational databases, Redis caches, message queues, object stores, SMTP mailers) as attached resources referenced via environment URIs. Backing services must be attachable/detachable without application code changes.
+- **Strict Build, Release, Run Separation & Ephemeral Admin Tasks (12-Factor Build/Release/Run & Admin Processes)**:
+  - Strictly enforce the separation between build, release, and run stages:
+    1. *Build*: transforms revision-controlled source code into an immutable container image tagged with a deterministic commit hash or semantic release tag.
+    2. *Release*: combines the immutable build artifact with environment-specific configuration and secrets.
+    3. *Run*: executes the release in stateless container processes. Containers in production are 100% immutable (zero in-place hot-patching or shell edits).
+  - Administrative and maintenance tasks (database migrations, data backfills, one-off seeds) must execute as isolated, ephemeral one-off processes (e.g. Kubernetes Jobs, single-run containers) using the identical release environment and codebase as the running application.
 - **Automated Supply Chain & Secret Scanning**:
   - Enforce automated secret scanning on pre-commit (`lint-staged`) and CI pipelines.
   - Maintain automated weekly dependency vulnerability audits and generate CycloneDX SBOM on all release builds.
