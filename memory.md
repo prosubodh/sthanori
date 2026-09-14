@@ -130,3 +130,29 @@
 - **Consequences**:
   - **Positive**: 100% testable purity; collaborator mocks explicitly verify tenant parameters; cross-tenant query leaks are physically prevented by the type system and port contracts; works uniformly across HTTP, background jobs, CLI, and event consumers.
   - **Trade-offs**: Repository interfaces must declare `tenantId` as the first argument in all query methods.
+
+---
+
+## ADR-005: Transport-Agnostic Commercial Entitlement Enforcement at the Application Use-Case Boundary
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Deciding where to enforce commercial entitlement and quota evaluations in the execution lifecycle presents three architectural choices:
+  1. *HTTP Transport Middleware / Route Guards*: Validates access before invoking the controller. Fast, but tightly coupled to the HTTP transport layer and completely blind to background jobs (`IJobQueue`), CLI tools, scheduled cron jobs, and event consumers.
+  2. *Command Bus Interceptor Pipeline*: Reflects on command metadata. Provides centralized interception, but adds abstraction complexity and reflection overhead.
+  3. *Application Use-Case Boundary*: Use cases / Command Handlers explicitly invoke `assertAccess(tenantId, featureKey)` and `assertQuota(tenantId, metricKey, quantity)`.
+
+- **Decision**:
+  Adopt **Application Use-Case Boundary Enforcement**:
+  1. Every Application Use Case modifying restricted capabilities or consuming quota explicitly calls `await this.entitlementPort.assertAccess(tenantId, featureKey)` before invoking domain mutations.
+  2. Transport-level guards (HTTP middleware) may be used optionally as a fast-rejection cache, but can never replace Application Use-Case guards.
+  3. In London School Outside-In TDD, use cases must mock `IEntitlementPort` directly and assert that unauthorized attempts throw typed commercial domain errors (`EntitlementExceededError` $\to$ HTTP 402, `QuotaExhaustedError` $\to$ HTTP 429).
+
+- **Rationale & Alternatives**:
+  - *Alternative Considered (HTTP Middleware Only)*: Rejected because asynchronous background worker handlers, webhook consumers, and CLI commands would bypass entitlement verification, allowing tenants to exploit out-of-band execution paths without being billed or gated.
+  - *Alternative Considered (Domain Core Entitlement Checks)*: Rejected because Domain Core must remain purely focused on business invariants and unaware of commercial pricing structures or billing tiers.
+
+- **Consequences**:
+  - **Positive**: 100% transport-agnostic; all execution paths (HTTP, queues, CLI, cron) are protected uniformly; easily mockable and verifiable in unit tests; keeps Domain Core pure while guarding application entrypoints.
+  - **Trade-offs**: Use cases must explicitly inject and call `IEntitlementPort`.
