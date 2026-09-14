@@ -739,6 +739,33 @@
   - **Positive**: Clean hexagonal boundaries; robust tenant isolation; pure domain models with zero ORM coupling; verified by London School Outside-In TDD.
   - **Trade-offs**: Requires setting up Drizzle schemas and migrations for properties and rentable spaces.
 
+---
+
+## ADR-022: UI-to-Backend Outside-In TDD Integration, Design Pro Max Theming, and Day-1 Container Parity
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**:
+  While domain and controller layers were tested in isolation, the outermost observable user interface in `apps/web` relied on static dummy state and lacked real API integration. Furthermore, Tailwind CSS v4 styling was not loaded, and full Docker containerization (`web` and `api` behind Traefik reverse proxy on port 80) was missing, violating Section 6, 7, and London School Outside-In TDD mandates of `AGENTS.md`.
+- **Decision**:
+  1. **Owned Client API Port (`IPropertyCatalogApiClient`)**:
+     - Define client interface `IPropertyCatalogApiClient` in `apps/web/src/features/properties/api/property-catalog.client.ts`.
+     - Implement `HttpPropertyCatalogApiClient` invoking `/api/v1/properties` with tenant scoping (`x-tenant-id`).
+     - In-memory test double `InMemoryPropertyCatalogApiClient` for isolated unit and acceptance testing.
+  2. **TanStack React Query Custom Hooks**:
+     - Provide `usePropertyCatalog`, `useCreateProperty`, `useCreateSpace`, `useUpdateSpaceStatus` to manage remote server state, loading skeletons, optimistic updates/cache invalidations, and error feedback.
+  3. **Outside-In UI Acceptance Tests**:
+     - Drive UI route `HomeComponent` with React Testing Library: assert loading skeleton $\to$ data render from API $\to$ add property mutation $\to$ add space mutation $\to$ update space status.
+  4. **Design Tokens & Tailwind v4 Theming (60-30-10 Rule)**:
+     - Connect `@sthanori/ui/styles.css` with Tailwind v4 `@theme` mappings (`--color-canvas`, `--color-surface`, `--color-main`, `--color-muted`, `--color-border`, `--color-accent`) and FOUC prevention.
+  5. **Day-1 Docker Parity**:
+     - Multi-stage Dockerfiles for `apps/api` and `apps/web` (with nginx reverse-proxy / static server).
+     - Wire Traefik v3.3 reverse proxy on port 80 with routes: `/api` $\to$ `api:4000`, `/docs` $\to$ `api:4000`, `/` $\to$ `web:80`.
+- **Consequences**:
+  - **Positive**: Full stack runs via `docker compose up -d --build` accessible at `http://localhost/`; UI reflects real backend database state; 100% adherence to `AGENTS.md` Outside-In TDD and DevSecOps invariants.
+  - **Trade-offs**: Requires building container images and keeping client contracts strictly aligned with backend DTOs.
+
+
 
 
 

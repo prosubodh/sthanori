@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Headers,
-  Inject,
-  Param,
-  Patch,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Get, Headers, Inject, Param, Patch, Post, Query } from '@nestjs/common';
 import type {
   CreatePropertyDto,
   CreateRentableSpaceDto,
@@ -37,8 +28,12 @@ export class PropertyCatalogController {
   @Get()
   public async listProperties(
     @Headers('x-tenant-id') tenantId: string,
-  ): Promise<PropertyResponseDto[]> {
+    @Query('includeSpaces') includeSpaces?: string,
+  ): Promise<(PropertyResponseDto | PropertyWithSpacesResponseDto)[]> {
     const effectiveTenantId = tenantId || 'default-workspace';
+    if (includeSpaces === 'true') {
+      return this.service.listPropertiesWithSpaces(effectiveTenantId);
+    }
     return this.service.listProperties(effectiveTenantId);
   }
 

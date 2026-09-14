@@ -41,6 +41,21 @@ export class PropertyCatalogService {
     return properties.map((prop) => this.mapPropertyToDto(prop));
   }
 
+  public async listPropertiesWithSpaces(
+    tenantId: string,
+  ): Promise<PropertyWithSpacesResponseDto[]> {
+    const properties = await this.propertyRepo.findAll(tenantId);
+    const results: PropertyWithSpacesResponseDto[] = [];
+    for (const prop of properties) {
+      const spaces = await this.spaceRepo.findByPropertyId(tenantId, prop.id);
+      results.push({
+        ...this.mapPropertyToDto(prop),
+        spaces: spaces.map((space) => this.mapSpaceToDto(space)),
+      });
+    }
+    return results;
+  }
+
   public async getPropertyById(
     tenantId: string,
     id: string,

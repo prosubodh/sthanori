@@ -77,6 +77,45 @@ describe('PropertyCatalogService (Application Use Cases)', () => {
       expect(list[0]?.id).toBe('prop-1');
       expect(list[0]?.name).toBe('Sunrise Apartments');
     });
+
+    it('should query spaces for each property and return PropertyWithSpacesResponseDto', async () => {
+      const prop = new PropertyAggregate({
+        id: 'prop-1',
+        tenantId,
+        name: 'Sunrise Apartments',
+        propertyType: 'RESIDENTIAL_MULTIFAMILY',
+        currency: 'USD',
+        address: {
+          street: '123 Sunset Way',
+          city: 'Dallas',
+          state: 'TX',
+          postalCode: '75001',
+          country: 'USA',
+        },
+      });
+      const space = new RentableSpaceAggregate({
+        id: 'space-1',
+        propertyId: 'prop-1',
+        tenantId,
+        spaceNumber: '101',
+        spaceType: 'WHOLE_APARTMENT',
+        floorLevel: 1,
+        floorAreaSqFt: 600,
+        maxOccupants: 2,
+        baseRentAmount: 150000,
+        status: 'VACANT',
+      });
+      vi.mocked(propertyRepoMock.findAll).mockResolvedValue([prop]);
+      vi.mocked(spaceRepoMock.findByPropertyId).mockResolvedValue([space]);
+
+      const list = await service.listPropertiesWithSpaces(tenantId);
+
+      expect(propertyRepoMock.findAll).toHaveBeenCalledWith(tenantId);
+      expect(spaceRepoMock.findByPropertyId).toHaveBeenCalledWith(tenantId, 'prop-1');
+      expect(list).toHaveLength(1);
+      expect(list[0]?.spaces).toHaveLength(1);
+      expect(list[0]?.spaces[0]?.id).toBe('space-1');
+    });
   });
 
   describe('createSpace', () => {

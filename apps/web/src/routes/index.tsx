@@ -1,126 +1,52 @@
-import type {
-  CreatePropertyDto,
-  CreateRentableSpaceDto,
-  PropertyWithSpacesResponseDto,
-  SpaceStatus,
-} from '@sthanori/shared';
+import type { CreatePropertyDto, CreateRentableSpaceDto, SpaceStatus } from '@sthanori/shared';
 import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import type { IPropertyCatalogApiClient } from '../features/properties/api/property-catalog.client';
+import {
+  useCreateProperty,
+  useCreateSpace,
+  usePropertyCatalog,
+  useUpdateSpaceStatus,
+} from '../features/properties/api/use-property-catalog';
 import { PropertyCatalogView } from '../features/properties/components/property-catalog-view';
 
 export const Route = createFileRoute('/')({
-  component: HomeComponent,
+  component: () => <HomeComponent />,
 });
 
-export function HomeComponent() {
-  const [properties, setProperties] = useState<PropertyWithSpacesResponseDto[]>([
-    {
-      id: 'prop-sample-1',
-      tenantId: 'demo-landlord-ws',
-      name: 'Kathmandu Residency',
-      propertyType: 'RESIDENTIAL_MULTIFAMILY',
-      currency: 'NPR',
-      address: {
-        street: '10 Lazimpat',
-        city: 'Kathmandu',
-        state: 'Bagmati',
-        postalCode: '44600',
-        country: 'Nepal',
-      },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      spaces: [
-        {
-          id: 'space-101',
-          propertyId: 'prop-sample-1',
-          tenantId: 'demo-landlord-ws',
-          spaceNumber: 'Apt 101',
-          buildingBlock: 'Block A',
-          spaceType: 'WHOLE_APARTMENT',
-          floorLevel: 1,
-          floorAreaSqFt: 750,
-          maxOccupants: 3,
-          baseRentAmount: 3500000,
-          status: 'VACANT',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: 'space-102',
-          propertyId: 'prop-sample-1',
-          tenantId: 'demo-landlord-ws',
-          spaceNumber: 'Apt 102',
-          buildingBlock: 'Block A',
-          spaceType: 'WHOLE_APARTMENT',
-          floorLevel: 1,
-          floorAreaSqFt: 850,
-          maxOccupants: 4,
-          baseRentAmount: 4000000,
-          status: 'OCCUPIED',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    },
-  ]);
+interface HomeComponentProps {
+  client?: IPropertyCatalogApiClient;
+  tenantId?: string;
+}
 
-  const handleCreateProperty = (dto: CreatePropertyDto) => {
-    const newProp: PropertyWithSpacesResponseDto = {
-      id: `prop-${Date.now()}`,
-      tenantId: 'demo-landlord-ws',
-      name: dto.name,
-      propertyType: dto.propertyType,
-      currency: dto.currency,
-      address: dto.address,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      spaces: [],
-    };
-    setProperties((prev) => [newProp, ...prev]);
+export function HomeComponent({ client, tenantId = 'demo-landlord-ws' }: HomeComponentProps) {
+  const { data: properties = [], isLoading, error, refetch } = usePropertyCatalog(client, tenantId);
+
+  const createPropertyMutation = useCreateProperty(client, tenantId);
+  const createSpaceMutation = useCreateSpace(client, tenantId);
+  const updateSpaceStatusMutation = useUpdateSpaceStatus(client, tenantId);
+
+  const handleCreateProperty = async (dto: CreatePropertyDto) => {
+    await createPropertyMutation.mutateAsync(dto);
   };
 
-  const handleCreateSpace = (propertyId: string, dto: CreateRentableSpaceDto) => {
-    setProperties((prev) =>
-      prev.map((prop) => {
-        if (prop.id !== propertyId) return prop;
-        const newSpace = {
-          id: `space-${Date.now()}`,
-          propertyId,
-          tenantId: 'demo-landlord-ws',
-          spaceNumber: dto.spaceNumber,
-          buildingBlock: dto.buildingBlock,
-          spaceType: dto.spaceType,
-          floorLevel: dto.floorLevel,
-          floorAreaSqFt: dto.floorAreaSqFt,
-          maxOccupants: dto.maxOccupants,
-          baseRentAmount: dto.baseRentAmount,
-          status: 'VACANT' as const,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        return {
-          ...prop,
-          spaces: [...prop.spaces, newSpace],
-        };
-      }),
-    );
+  const handleCreateSpace = async (propertyId: string, dto: CreateRentableSpaceDto) => {
+    await createSpaceMutation.mutateAsync({ propertyId, dto });
   };
 
-  const handleUpdateSpaceStatus = (propertyId: string, spaceId: string, status: SpaceStatus) => {
-    setProperties((prev) =>
-      prev.map((prop) => {
-        if (prop.id !== propertyId) return prop;
-        return {
-          ...prop,
-          spaces: prop.spaces.map((space) => (space.id === spaceId ? { ...space, status } : space)),
-        };
-      }),
-    );
+  const handleUpdateSpaceStatus = async (
+    propertyId: string,
+    spaceId: string,
+    status: SpaceStatus,
+  ) => {
+    await updateSpaceStatusMutation.mutateAsync({ propertyId, spaceId, status });
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="max-w-6xl mx-auto pt-8 pb-4 text-center">
+    <div className="min-h-screen bg-canvas text-main">
+      <header className="max-w-6xl mx-auto pt-8 pb-4 px-6 text-center">
+        <div className="inline-block px-3 py-1 text-xs font-semibold uppercase tracking-wider rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800 mb-3">
+          Workspace: {tenantId}
+        </div>
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
           Sthanori Multi-Tenant Platform
         </h1>
@@ -128,14 +54,55 @@ export function HomeComponent() {
           Enterprise SaaS platform powered by Hexagonal Architecture, London School TDD, and
           12-Factor cloud-native discipline.
         </p>
-      </div>
+      </header>
 
-      <PropertyCatalogView
-        properties={properties}
-        onCreateProperty={handleCreateProperty}
-        onCreateSpace={handleCreateSpace}
-        onUpdateSpaceStatus={handleUpdateSpaceStatus}
-      />
+      <main className="max-w-6xl mx-auto px-6 pb-12">
+        {isLoading && (
+          <output
+            data-testid="property-catalog-skeleton"
+            aria-live="polite"
+            className="block w-full space-y-6 animate-pulse"
+          >
+            <div className="h-8 bg-zinc-800/60 rounded-md w-1/3" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="h-64 bg-zinc-900/50 border border-zinc-800 rounded-xl" />
+              <div className="h-64 bg-zinc-900/50 border border-zinc-800 rounded-xl" />
+            </div>
+            <div className="h-96 bg-zinc-900/50 border border-zinc-800 rounded-xl" />
+            <span className="sr-only">Loading properties...</span>
+          </output>
+        )}
+
+        {error && (
+          <div
+            role="alert"
+            className="p-6 rounded-xl bg-red-950/50 border border-red-800 text-red-200 space-y-4 my-6"
+          >
+            <div className="flex items-center space-x-3">
+              <span className="text-xl font-bold">⚠️ Connection Error</span>
+            </div>
+            <p className="text-sm text-red-300">
+              {error instanceof Error ? error.message : 'Failed to fetch property catalog'}
+            </p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!isLoading && !error && (
+          <PropertyCatalogView
+            properties={properties}
+            onCreateProperty={handleCreateProperty}
+            onCreateSpace={handleCreateSpace}
+            onUpdateSpaceStatus={handleUpdateSpaceStatus}
+          />
+        )}
+      </main>
     </div>
   );
 }
