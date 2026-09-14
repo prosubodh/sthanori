@@ -396,5 +396,41 @@
   - **Positive**: Cohesive feature encapsulation; refactor-safe test mobility; zero orphaned tests; instant sub-second test discovery; clear architectural separation between Domain Core, Application, and Adapters.
   - **Trade-offs**: Requires configuring toolchains (such as TanStack Router) to ignore sibling `*.spec.*` files during route generation (already configured).
 
+---
+
+## ADR-012: Real Estate Rental Management Domain Model, Ubiquitous Language, and Business Specifications
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Transitioning from workspace infrastructure to business domain modeling requires defining the core bounded contexts, ubiquitous language, aggregate invariants, and business rules for rental property management. Key design challenges included:
+  1. *Naming Collision*: Disambiguating multi-tenant SaaS workspace identity (`tenantId`) from the physical counter-party leasing real estate.
+  2. *Tri-Modal Scope*: Supporting multi-unit residential, co-living/shared housing, and commercial real estate within a unified domain model.
+  3. *Utility & Financial Flexibility*: Modeling divergent utility billing mechanisms (sub-meters, RUBS, roommate splits, flat fees), payment allocation waterfalls, late fee policies, and security deposit escrow settlements without hardcoding conditionals.
+
+- **Decision**:
+  1. **Strict Tenancy Disambiguation**:
+     - `tenantId` is reserved exclusively for the SaaS customer workspace (Landlord / Property Management Company) at the database and application boundary.
+     - The leasing party is represented by `Renter` with polymorphic subtypes: `Resident` (residential), `Occupant` (co-living room), and `CommercialClient` (commercial businesses).
+  2. **Bounded Context Architecture**:
+     - *Property & Space Catalog Context*: `PropertyAggregate` and `RentableSpaceAggregate` supporting whole units, private rooms, and commercial suites.
+     - *Lease & Tenancy Context*: `LeaseAgreementAggregate` governed by `ILeaseTransitionPolicy` state machines.
+     - *Utility Metering & Calculation Context*: `UtilityMeterAggregate` and `IUtilityCalculationStrategy` (Sub-meter, RUBS SqFt/Occupants, Equal Split, Flat Fee).
+     - *Invoicing & Payments Context*: `RentalInvoiceAggregate`, `IPaymentAllocationStrategy` (FIFO Waterfall, Proportional, Strict Full), and `ILateFeeStrategy`.
+     - *Security Deposit Escrow Context*: Full escrow ledger tracking move-in collection, itemized move-out deductions, and settlement statements.
+  3. **Formal Documentation Assets**:
+     - Codified comprehensive domain entities, ubiquitous language, and state machines in [`docs/DOMAIN_ANALYSIS.md`](file:///home/prosubodh/projects/sthanori/docs/DOMAIN_ANALYSIS.md).
+     - Codified functional and non-functional requirements, edge cases, and user roles in [`docs/BUSINESS_REQUIREMENTS.md`](file:///home/prosubodh/projects/sthanori/docs/BUSINESS_REQUIREMENTS.md).
+
+- **Rationale & Alternatives**:
+  - *Alternative Considered (Using "Tenant" for Renters)*: Strictly rejected due to intolerable naming ambiguity and query contamination with SaaS `tenantId`.
+  - *Alternative Considered (Single Residential-Only Model)*: Rejected in favor of the unified tri-modal model enabling Sthanori to serve residential, co-living, and commercial landlords seamlessly.
+  - *Alternative Considered (Hardcoded Billing Logic)*: Rejected; all algorithmic variations (utilities, late fees, payment allocation, proration) use the Feature-Flagged Strategy Pattern (ADR-007).
+
+- **Consequences**:
+  - **Positive**: Clean, collision-free ubiquitous language; total business alignment before writing implementation code; extreme modularity through domain strategies; auditable financial ledger architecture.
+  - **Trade-offs**: Requires building domain strategy implementations for each billing variant.
+
+
 
 
