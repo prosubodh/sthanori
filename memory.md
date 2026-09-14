@@ -287,3 +287,48 @@
   - **Positive**: Complete cloud-native resilience; zero dropped requests during rolling deploys or autoscaling; clean dev/prod parity; leak-free secret management; full auditability and observability; applications are immediately production-ready for Kubernetes, ECS, Cloud Run, or Nomad.
   - **Trade-offs**: Requires wiring process signal handlers and shutdown hooks at the application Composition Root.
 
+---
+
+## ADR-010: Standardized Open-Source Workspace Architecture, Toolchain, and Verification Blueprint
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Following the formalization of Universal Core Invariants, Triggered Capabilities, and 12/15-Factor Cloud-Native standards, establishing the physical codebase structure and developer workflows requires explicit agreement without implicit assumptions. A rigorous, interactive decision review was conducted covering repository topology, runtimes, frameworks, persistence, testing, quality gates, and local orchestration under the mandate to strictly use best-in-class, battle-tested, permissive open-source tools.
+
+- **Decision**:
+  Adopt the following technical stack and workspace architecture:
+  1. **Repository Topology & Build Orchestration**:
+     - Monorepo workspace managed by **Turborepo** and **pnpm** workspaces (`pnpm-workspace.yaml`).
+     - Standardized TypeScript (`tsconfig.base.json`) with strict compiler flags across all packages.
+  2. **Application Topology**:
+     - `apps/api`: **NestJS** backend modular application exporting OpenAPI v3.1 schemas, serving HTTP endpoints, with pure DI / application services driving domain use cases.
+     - `apps/web`: **React 19** Single Page Application bundled with **Vite**, utilizing **TanStack Router** (type-safe file-based routing and deep linking), **TanStack Query** (colocated route loaders and server cache), **shadcn/ui** (headless Radix primitives), and **Tailwind CSS**.
+  3. **Shared Package Boundaries (Hexagonal Architecture)**:
+     - `packages/domain`: Pure Domain Core (Entities, Value Objects, Domain Events, Strategy Interfaces, Domain Exceptions). Zero external framework or database dependencies.
+     - `packages/db`: **PostgreSQL** persistence layer via **Drizzle ORM**, `drizzle-kit` version-controlled migrations, and native Row-Level Security (RLS) policies.
+     - `packages/shared`: Shared **Zod** validation schemas, common DTO types, standard API error envelopes, and HTTP contract definitions.
+     - `packages/ui`: Shared design system tokens (CSS variables conforming to UI/UX Pro Max 60-30-10) and reusable shadcn component primitives.
+  4. **API Contracts & Client Integration**:
+     - Shared Zod validation schemas in `packages/shared`.
+     - OpenAPI v3.1 specification generated from NestJS.
+     - TanStack Query hooks in `apps/web` generated via **Orval** / `@hey-api/openapi-ts`.
+  5. **Verification & Testing Infrastructure**:
+     - **Vitest** standardized across all packages for unit and integration testing with native ESM, instant watch mode, and a mandatory 100.00% v8 coverage gate.
+     - **Playwright** for end-to-end user acceptance and accessibility testing.
+  6. **Code Quality, Formatting & Git Discipline**:
+     - **Biome** for blazing-fast open-source linting and formatting, enforcing strict TypeScript rules and zero type escapes (`any`, `@ts-ignore`).
+     - **Husky** + **lint-staged** + **commitlint** to automate pre-commit linting and enforce Conventional Commits.
+  7. **Local Container Orchestration**:
+     - Multi-stage Dockerfiles and `docker-compose.yml`.
+     - **Traefik** reverse proxy on port 80 routing `/api` to `apps/api` and `/` to `apps/web` with automatic container label discovery.
+
+- **Rationale & Alternatives**:
+  - *Alternatives Evaluated*: Monolithic single-directory app, Bun runtime, Fastify/Hono standalone, Next.js App Router, Prisma/TypeORM, Nx, Jest, ESLint/Prettier, Lefthook, Nginx.
+  - *Chosen Approach*: Provides the optimal balance of enterprise modularity (NestJS + pnpm monorepo), type-safe client-server contracts (Zod + OpenAPI + TanStack), blazing-fast iteration (Vite + Vitest + Biome), and seamless compliance with `AGENTS.md` and 12-factor cloud-native standards.
+
+- **Consequences**:
+  - **Positive**: Zero assumptions; strict boundary isolation between domain core, database, and presentation; end-to-end type safety; sub-second linting and testing; predictable day-1 container parity.
+  - **Trade-offs**: Requires setting up initial workspace boilerplate (pnpm, Turborepo, Biome, TypeScript project references).
+
+
