@@ -136,25 +136,32 @@ flowchart TD
 
 ### 4.2 `PropertyOwnerAggregate`
 - **Identity**: `OwnerId`, immutable `tenantId`.
-- **Properties**: LegalName, ContactEmail, ContactPhone, TaxId, BankDisbursementDetails, DefaultManagementFeePct (e.g. 8.00%).
+- **Properties**: LegalName, ContactEmail, ContactPhone, TaxId, BankDisbursementDetails, OperatingCurrency (`USD` | `NPR`), DefaultManagementFeePct (e.g. 8.00%), `AuthorizedMaintenanceLimit` (minor units, e.g. $300 / NPR 25,000).
 - **Invariants**:
   - Bank routing and account details must be encrypted at rest.
   - Owner statements must balance: $\text{Disbursement} = \text{Gross Rent} - \text{Management Fees} - \text{Owner Maintenance Expenses}$.
+  - Non-emergency maintenance work orders exceeding `AuthorizedMaintenanceLimit` must trigger `PENDING_OWNER_APPROVAL` before dispatch.
+
 
 ### 4.3 `RentableSpaceAggregate` (Unit / Room / Suite)
 - **Identity**: `SpaceId`, `PropertyId`, immutable `tenantId`.
-- **Properties**: SpaceNumber/Label (e.g. "Apt 4B", "Bedroom 2", "Suite 300"), `SpaceType` (`WHOLE_APARTMENT`, `PRIVATE_ROOM`, `COMMERCIAL_SUITE`), FloorAreaSqFt, MaxOccupants, BaseRentAmount, Status (`VACANT`, `OCCUPIED`, `MAINTENANCE`, `RESERVED`), `ParentUnitId` (for co-living rooms grouped in an apartment).
+- **Properties**: SpaceNumber/Label (e.g. "Apt 4B", "Bedroom 2", "Suite 300"), `BuildingBlock` (optional string, e.g. "Tower A", "Building 2"), `SpaceType` (`WHOLE_APARTMENT`, `PRIVATE_ROOM`, `COMMERCIAL_SUITE`), FloorAreaSqFt, MaxOccupants, BaseRentAmount, Status (`VACANT`, `OCCUPIED`, `MAINTENANCE`, `RESERVED`), `ParentSpaceId` (optional, for co-living private rooms or sub-suites nested within a parent unit).
 - **Invariants**:
   - Status cannot be set to `VACANT` if an active `LeaseAgreement` covers the current date.
   - Square footage must be greater than zero.
+  - If `ParentSpaceId` is specified, it must reference an existing `RentableSpace` within the same `PropertyId` and `tenantId`, and cyclic parent-child chains are strictly prohibited.
+
 
 ### 4.4 `RenterProfileAggregate`
 - **Identity**: `RenterId`, immutable `tenantId`.
-- **Properties**: PrimaryName, ContactEmail, ContactPhone, `RenterType` (`RESIDENTIAL_RESIDENT`, `CO_LIVING_OCCUPANT`, `COMMERCIAL_CLIENT`), TaxOrBusinessId (for commercial), EmergencyContacts, CreditBalance, `IsLegalHoldActive` (boolean).
+- **Properties**: PrimaryName, ContactEmail, ContactPhone, `RenterType` (`RESIDENTIAL_RESIDENT`, `CO_LIVING_OCCUPANT`, `COMMERCIAL_CLIENT`), TaxOrBusinessId (for commercial), EmergencyContacts, CreditBalance, `IsLegalHoldActive` (boolean), `PortalAccountStatus` (`PENDING_INVITE`, `INVITATION_SENT`, `ACTIVATED`, `DISABLED`), `LinkedUserId` (nullable global auth ID).
 - **Invariants**:
+  - `ContactEmail` must be unique per `tenantId` (allowing one cumulative profile across multiple successive leases).
   - Email format must be validated via standard email regex schema.
+  - Onboarding Hybrid: By default, profile creation triggers immediate portal provisioning (`sendInviteImmediately: true`); landlords can suppress immediate dispatch (`sendInviteImmediately: false`) for legacy paper records and invite later on demand.
   - Credit balance represents overpayments and must be automatically applied to future invoices.
   - When `IsLegalHoldActive` is true, partial payments are strictly rejected.
+
 
 ### 4.5 `LeaseAgreementAggregate`
 - **Identity**: `LeaseId`, `SpaceId`, immutable `tenantId`.
@@ -172,17 +179,22 @@ flowchart TD
   - `EndDate` must be strictly after `StartDate`.
   - Base rent must be represented as a positive integer in minor currency units (e.g. cents).
   - Roommate split percentages (if configured) must sum exactly to 100.00%.
+  - Mutual Space Exclusion: Activating a lease on a parent unit strictly requires that all child spaces are vacant with zero overlapping active leases; activating a lease on any child space blocks activating an overlapping lease on the parent unit.
+
 
 ### 4.6 `MeterReadingSubmissionAggregate`
 - **Identity**: `SubmissionId`, `MeterId`, `SpaceId`, immutable `tenantId`.
 - **Properties**:
-  - Submitter: `SubmitterRole` (`RENTER` | `LANDLORD` | `TECHNICIAN`), `SubmitterId`.
-  - ReadingData: MeterReadingValue, UnitOfMeasure (`KWH`, `GALLONS`, `CUBIC_METERS`, `CCF`, `THERMS`), ReadingDate.
-  - Evidence: PhotoProofUrl (mandatory for renter submissions), Timestamp, DeviceMetadata.
-  - Verification: Status (`SUBMITTED`, `VERIFIED_BY_LANDLORD`, `FLAGGED_SPIKE`, `DISPUTED`, `REJECTED`, `INVOICED`), VerificationDate, ReviewerNotes.
+  - Submitter: `SubmitterRole` (`RENTER` | `LANDLORD` | `TECHNICIAN` | `SYSTEM_ESTIMATE`), `SubmitterId`.
+  - ReadingData: MeterReadingValue, UnitOfMeasure (`KWH`, `GALLONS`, `CUBIC_METERS`, `CCF`, `THERMS`), ReadingDate, `IsEstimated` (boolean).
+  - Evidence: PhotoProofUrl (mandatory for renter submissions, null for system estimates), Timestamp, DeviceMetadata.
+  - Verification: Status (`SUBMITTED`, `VERIFIED_BY_LANDLORD`, `FLAGGED_SPIKE`, `DISPUTED`, `REJECTED`, `INVOICED`, `ESTIMATED_PENDING_TRUE_UP`), VerificationDate, ReviewerNotes.
 - **Invariants**:
-  - Submissions by renters require a valid photo URL.
+  - Submissions by renters strictly require a valid photo URL.
+  - System estimates generated under `HistoricalAverageEstimatePolicy` must be explicitly tagged as `IsEstimated: true` and status `ESTIMATED_PENDING_TRUE_UP`.
+  - Upon subsequent verification of an actual physical reading, the domain billing engine must automatically generate a variance reconciliation credit or charge.
   - Readings flagged as `FLAGGED_SPIKE` (>200% rolling average) cannot be invoiced without explicit supervisor verification.
+
 
 ### 4.7 `SecurityDepositEscrowLedger`
 - **Identity**: `EscrowLedgerId`, `LeaseId`, immutable `tenantId`.
@@ -191,26 +203,35 @@ flowchart TD
   - `PET_DEPOSIT` (pet damage guarantee)
   - `KEY_ACCESS_DEPOSIT` (fob/key guarantee)
   - `ADVANCE_LAST_MONTH_RENT` (prepaid final month rent)
-- **Properties**: EscrowBankAccountId, TotalCollected, AccruedInterestAmount, StatutoryInterestRatePct, Status (`HELD_IN_ESCROW`, `RECONCILING`, `SETTLED`).
+- **Properties**: EscrowBankAccountId, TotalCollected, AccruedInterestAmount (0 under default policy), StatutoryInterestRatePct (optional), Status (`HELD_IN_ESCROW`, `RECONCILING`, `SETTLED`).
+- **Configurable Interest Policy (`IDepositInterestPolicy`)**:
+  - `NoDepositInterestPolicy` (Default): Deposits are non-interest-bearing principal (standard for Nepal, commercial leases, and private landlords); $\text{AccruedInterest} = 0$.
+  - `MoveOutCompoundingCreditPolicy`: Accrues statutory interest within the escrow ledger, paying out upon final move-out settlement.
+  - `AnnualRentInvoiceCreditPolicy`: Automatically applies accrued interest as a credit memo on the 12th-month rental invoice.
 - **Move-Out Settlement (`MoveOutSettlementStatement`)**:
   - Itemized deductions: Unpaid Rent, Outstanding Utilities (final sub-meter or escrow holdback), Repair Damages (linked Work Order IDs), Cleaning Fees.
   - Settlement Formula: $\text{NetRefund} = \text{TotalCollected} + \text{AccruedInterest} - \text{TotalDeductions}$.
 
+
 ### 4.8 `MaintenanceWorkOrderAggregate`
 - **Identity**: `WorkOrderId`, `SpaceId`, `PropertyId`, immutable `tenantId`.
 - **Properties**: Title, Description, Category (`PLUMBING`, `HVAC`, `ELECTRICAL`, `APPLIANCE`, `STRUCTURAL`, `LOCK_SECURITY`), Priority (`LOW`, `MEDIUM`, `HIGH`, `EMERGENCY`), ReportedByRenterId, AssignedVendorId.
-- **Financial Attribution**:
+- **Financial Attribution & Invariants**:
   - `CostAttribution`: `LANDLORD_EXPENSE` (owner operating cost) vs. `TENANT_CHARGEBACK` (tenant liability).
-  - EstimatedCost, FinalLaborCost, FinalPartsCost, TotalCost, SupportingInvoices/Photos.
+  - EstimatedCost, FinalLaborCost, FinalPartsCost, TotalCost, SupportingInvoices/Photos, TechnicianDiagnosisNotes.
   - `InvoicedStatus`: `NOT_INVOICED` | `INVOICED_TO_RENTER` | `DEDUCTED_FROM_OWNER`.
-- **Status**: `SUBMITTED` $\to$ `DISPATCHED` $\to$ `IN_PROGRESS` $\to$ `COMPLETED` $\to$ `CLOSED`.
+  - Evidence Gate: Converting to `TENANT_CHARGEBACK` strictly requires technician diagnosis notes and itemized invoice attachments, initiating a mandatory 5-business-day resident review window before committing to monthly invoices.
+- **Status Transitions**: `SUBMITTED` $\to$ `PENDING_OWNER_APPROVAL` (if non-emergency cost exceeds owner limit) $\to$ `DISPATCHED` $\to$ `IN_PROGRESS` $\to$ `COMPLETED` $\to$ `PENDING_TENANT_REVIEW` (if chargeback) $\to$ `CLOSED`.
+
 
 ### 4.9 `RepaymentPlanAggregate`
 - **Identity**: `RepaymentPlanId`, `LeaseId`, `RenterId`, immutable `tenantId`.
 - **Properties**: TotalArrearsDebt, MonthlyInstallmentAmount, TotalInstallments, RemainingInstallments, StartDate, NextInstallmentDueDate, Status (`ACTIVE`, `DEFAULTED`, `SATISFIED`).
 - **Invariants**:
   - Monthly installment is appended as an itemized line item to each recurring monthly rental invoice.
-  - A missed repayment installment automatically transitions status to `DEFAULTED` and alerts landlord to resume legal action.
+  - A missed repayment installment past the grace period automatically transitions status to `DEFAULTED` and alerts management to execute statutory eviction remedies.
+  - Legal Hold Protection: Issuing a statutory Notice to Pay or Quit automatically engages `IsLegalHoldActive = true`, rejecting partial payments and demanding 100.00% full settlement of arrears to prevent accidental notice waiver.
+
 
 ### 4.10 `RentalInvoiceAggregate`
 - **Identity**: `InvoiceId`, `LeaseId`, immutable `tenantId`.
@@ -219,13 +240,33 @@ flowchart TD
   - `Type`: `BASE_RENT`, `UTILITY_ELECTRICITY`, `UTILITY_WATER`, `UTILITY_INTERNET`, `CAM_FEE`, `ANCILLARY_PARKING`, `ANCILLARY_PET`, `ANCILLARY_STORAGE`, `MAINTENANCE_CHARGEBACK`, `REPAYMENT_INSTALLMENT`, `LATE_FEE`, `CONCESSION_DISCOUNT`, `EARLY_BIRD_DISCOUNT`, `TAX_LEVY`, `CUSTOM`.
   - Description, Quantity, UnitPrice, TotalAmount, `TaxRatePct` (e.g. 0% residential, 10% commercial/parking).
 - **Payments (`PaymentReceipt`)**:
-  - ReceiptId, AmountPaid, PaymentDate, Method (`CASH`, `CHECK`, `BANK_TRANSFER`, `CREDIT_CARD`), ReferenceNumber, AllocatedBreakdown.
+  - ReceiptId, AmountPaid, PaymentDate, Method (`CASH`, `CHECK`, `BANK_TRANSFER`, `CREDIT_CARD`), ReferenceNumber, AllocatedBreakdown, `Status` (`COMMITTED`, `REVERSED`).
+- **Reversals (`PaymentReversalRecord`)**:
+  - ReversalId, OriginalReceiptId, ReversalReason (`NSF_BOUNCED_CHECK`, `ACH_RETURN`, `CHARGEBACK`), ReversalDate, FeeAssessed, AuditorNotes.
 - **Invariants**:
+  - Multi-Currency Standard: `Currency` binds to ISO-4217 (`USD` or `NPR`). All monetary attributes stored strictly as positive integers in minor currency units (cents for USD, paisa for NPR; $1\text{ NPR} = 100\text{ paisa}$).
   - Total amount equals the sum of line items.
-  - Balance Due equals Total Amount minus Sum of allocated Payments.
+  - Balance Due equals Total Amount minus Sum of allocated non-reversed Payments minus Applied Credits.
   - Status automatically transitions to `PAID` when Balance Due reaches 0.
+  - Payment Reversal: Executing a reversal permanently marks the receipt as `REVERSED`, restores unpaid line item balances, triggers late fee re-evaluation, and appends an incidental NSF chargeback line item.
+  - Unapplied Credit Drawdown: Available credit balance in `RenterProfile.CreditBalance` automatically draws down against the oldest open invoice upon cycle generation.
+
+
+### 4.11 `AncillaryInventoryAssetAggregate` (Parking Spots & Storage Lockers)
+- **Identity**: `AssetId`, `PropertyId`, immutable `tenantId`.
+- **Properties**:
+  - `AssetType`: `PARKING_STALL_STANDARD`, `PARKING_STALL_EV`, `PARKING_CARPORT`, `STORAGE_LOCKER`, `STORAGE_ROOM`.
+  - `IdentifierLabel`: Unique physical label (e.g. "Space P-14", "Locker 3B").
+  - `BaseMonthlyFee`: Minor currency units (e.g. 15000 = $150.00/mo).
+  - `Status`: `VACANT`, `ASSIGNED`, `MAINTENANCE`, `OUT_OF_SERVICE`.
+  - `ActiveLeaseAssignment`: Optional `{ leaseId: string, assignedAt: string, expiresAt: string | null }`.
+- **Invariants**:
+  - An asset cannot be assigned to more than one active lease concurrently.
+  - Assignment strictly verifies the asset's `Status` is `VACANT`.
+  - Mid-cycle assignment/removal proration is evaluated via `IAncillaryProrationPolicy` (`ProratedDaysPolicy` vs `FullMonthFeePolicy`).
 
 ---
+
 
 ## 5. Domain Strategy Patterns (Configurable Algorithms)
 
@@ -301,21 +342,31 @@ classDiagram
     ITaxCalculationStrategy <|.. StandardTaxCalculationStrategy
 ```
 
-### 5.1 `IUtilityCalculationStrategy` (with CAM Deduction)
+### 5.1 `IUtilityCalculationStrategy` (with CAM & Vacancy Handling)
 - **`SubMeterCalculationStrategy`**: Charge = $(Reading_{current} - Reading_{previous}) \times RatePerUnit$.
 - **`EqualSplitCalculationStrategy`**: Charge = $(MasterBill \times (1 - CamAllowancePct)) / ActiveOccupantCount$.
 - **`RubsSqftCalculationStrategy`**: Charge = $(MasterBill \times (1 - CamAllowancePct)) \times (SpaceSqFt / TotalPropertySqFt)$.
 - **`FlatFeeCalculationStrategy`**: Fixed recurring amount defined in lease agreement.
+- **`IRubsVacancyAllocationPolicy` (Vacancy Handling)**:
+  - `LandlordAbsorbsVacantSharePolicy` (Default): Landlord absorbs the fractional share for any unleased/vacant spaces, protecting active renters from illegal empty-unit cost shifting.
+  - `ActiveOccupantsPoolTotalBillPolicy`: Pools 100% of master bill across current active leases (permitted in specific co-living contracts).
 
 ### 5.2 `IFinalUtilitySettlementStrategy` (Move-Out Settlement)
 - **`FinalPhysicalMeterReadingStrategy`**: Reading taken on move-out day multiplied by active tariff; charged immediately.
 - **`HistoricalDailyAverageStrategy`**: Daily average of prior 90 days multiplied by days occupied in final cycle; charged immediately.
-- **`TemporaryEscrowHoldbackStrategy`**: Holds an agreed escrow amount (e.g. $150) until the municipal utility bill arrives, then true-up and refund remaining balance.
+- **`TemporaryEscrowHoldbackStrategy`**:
+  - Two-Stage Execution: Issues an `InterimMoveOutStatement` within statutory refund deadlines (14–21 days) disbursing undisputed deposit funds while holding the utility escrow amount; upon municipal bill entry, issues a `FinalMoveOutStatement` with true-up refund or shortfall invoice.
+  - `HoldbackSunsetExpiryPolicy`: Configurable window (30–90 days, default 60 days). If the landlord fails to enter the municipal bill before expiry, the held escrow amount is automatically forfeited and refunded in full to the renter.
 
-### 5.3 `IRoommateBillingStrategy`
+
+### 5.3 `IRoommateBillingStrategy` & Default Policy
 - **`JointSeveralSplitInvoiceStrategy`**: Generates individualized invoices per roommate based on configured split percentages (e.g. 50/50), while retaining joint legal liability on the underlying lease.
 - **`SingleMasterInvoiceStrategy`**: Generates one master invoice for the entire unit; roommates make partial payments toward the shared balance.
 - **`IndividualRoomLeaseStrategy`**: Generates an independent invoice for each private bedroom lease, with common utilities split among current active occupants.
+- **`IRoommateDefaultPolicy` (Default Handling)**:
+  - `TargetedDefaulterPolicy` (Default): Assesses late fee strictly against the delinquent sub-invoice; urgent reminders target the defaulting roommate, while sending a courtesy joint-liability advisory notice to paying co-tenants.
+  - `SharedHouseholdSurchargePolicy`: Assesses late fee against the consolidated unit or splits late fee evenly across roommates.
+
 
 ### 5.4 `IPaymentAllocationStrategy`
 - **`FifoWaterfallAllocationStrategy` (Default)**: Payments clear oldest outstanding invoices first. Within an invoice, funds clear `BASE_RENT` first, followed by `UTILITIES`, then `ANCILLARY_SERVICES`, then `MAINTENANCE_CHARGEBACKS`, then `LATE_FEES`.
@@ -323,10 +374,31 @@ classDiagram
 - **`StrictFullAllocationStrategy`**: Rejects partial allocation; holds funds in unapplied credit until full invoice amount is satisfied.
 
 ### 5.5 `ITaxCalculationStrategy`
-- Residential leases: Base rent is tax-exempt ($0\%$). Ancillary parking/storage or short-term stays taxed according to jurisdiction.
-- Commercial leases: Rent, CAM, and parking taxed at configured VAT/Sales Tax rate (e.g. $10\%$ or $19\%$).
+- **Line-Item Taxability**:
+  - Residential leases: Base rent is tax-exempt ($0\%$). Ancillary parking/storage or short-term stays taxed according to jurisdiction.
+  - Commercial leases: Rent, CAM, and parking taxed at configured VAT/Sales Tax rate (e.g. $10\%$ or $19\%$).
+- **`TaxCalculationMode`**:
+  - `TAX_EXCLUSIVE` (Default): Tax calculated on net subtotal and added to gross invoice amount.
+  - `TAX_INCLUSIVE`: Quoted line amount includes tax; tax extracted backwards for statutory remittance.
+- **Precision & Rounding Invariant**:
+  - Enforce canonical **Line-Item Banker's Rounding (Half-Even)** in minor currency units (cents). Every line stores its calculated `TaxAmount`, guaranteeing $\text{Total Invoice Tax} \equiv \sum \text{LineItem.TaxAmount}$ with zero penny rounding drift.
+
+
+### 5.6 `IProrationStrategy` & Move-In Timing Rule
+- **`ActualCalendarDaysProrationStrategy` (Default)**: Daily rate = $\text{BaseRent} / \text{DaysInMonth}$. Accurately scales for 28, 29, 30, or 31-day months.
+- **`Standard30DayProrationStrategy`**: Daily rate = $\text{BaseRent} / 30$ (standard commercial banker's month).
+- **`ProrationCollectionRule`**:
+  - Move-in on or before day $N$ (default 20th): Bill exact prorated days for month 1.
+  - Move-in after day $N$: Collect full month 1 rent at lease inception; credit/adjust prorated days on month 2 invoice.
+
+### 5.7 `IConcessionClawbackPolicy` & Early-Bird Mechanics
+- **`ProRataClawbackPolicy` (Default)**: Recovers unserved portion upon early lease termination ($\text{Concession} \times \frac{\text{UnservedDays}}{\text{TotalLeaseDays}}$).
+- **`FullClawbackPolicy`**: Demands 100% reimbursement of all promotional concessions if the tenant breaches or abandons early.
+- **Early-Bird Dynamic Validation**: Evaluated against payment arrival timestamp; commits the incentive discount if received on or before the designated early cutoff date.
 
 ---
+
+
 
 ## 6. State Machine Specifications
 
@@ -576,7 +648,12 @@ Properties equipped with rooftop solar PV arrays generate distributed energy tha
   1. **`LandlordAbsorptionStrategy` (Default)**: Renters are billed strictly based on their individual sub-meter consumption evaluated against standard municipal utility tariff rates. All solar net-metering credits, green energy incentives, bulk master volume discounts, and line losses are retained/absorbed directly by the property owner.
   2. **`ProportionalPassThroughStrategy`**: Any net credits (or line loss surcharges) reflected on the utility company's master bill are distributed across active renters in proportion to each renter's share of total metered consumption during the billing period.
 
+### 8.6 `ITariffEffectiveDatePolicy` (Mid-Cycle Rate Hikes)
+- **`WeightedDayCountProRataPolicy` (Default)**: When utility tariff rates change mid-cycle (e.g. on the 15th), total consumption is split proportionally across days elapsed under the old and new tariffs.
+- **`ReadingDateRatePolicy`**: Evaluates all consumption against the tariff active on the final meter reading date.
+
 ---
+
 
 ## 9. Move-In/Move-Out Condition Inspection & Wear-and-Tear Depreciation
 
@@ -771,11 +848,14 @@ flowchart TD
 
 - **Domain Model Structure**:
   - `CorporateObligor`: Legal company name, tax/registration identifier, authorized corporate officer signatory, dedicated corporate accounts payable contact.
-  - `AuthorizedOccupantRecord`: Individual human beings assigned to occupy the space.
+  - `AuthorizedOccupantRecord`: Individual human beings assigned to occupy the space:
     - Properties: FullName, ContactPhone, ContactEmail, GovernmentIdVerificationHash, EmergencyContact, AssignedKeyFobId, AccessStartDate, AccessEndDate, Status (`SCHEDULED`, `ACTIVE`, `CHECKED_OUT`).
   - **Occupant Turnover Invariant**: When an occupant departs and a replacement arrives, the underlying `LeaseAgreementAggregate` remains active and untouched. The system executes an **Occupant Rotation Event**, which revokes building access credentials for the departing occupant, issues credentials to the incoming occupant, and archives check-in condition photos without modifying billing schedules.
+  - **Space Capacity Bounds**: The count of concurrent active occupants on a corporate lease cannot exceed `RentableSpaceAggregate.MaxOccupants`, governed by configurable `HardCapacityBlockPolicy` (default, blocks over-allocation) vs. `PermissiveWithOverageSurchargePolicy`.
+
 
 ---
+
 
 ### 10.3 Security Deposit Replacement & Surety Insurance Programs
 

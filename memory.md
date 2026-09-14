@@ -610,6 +610,43 @@
   - **Positive**: Full-spectrum market readiness for student housing, corporate executive suites, and modern deposit-free residential communities; legally sound guarantee contracts.
   - **Trade-offs**: Requires managing occupant turnover rosters and insurance claim lifecycles.
 
+---
+
+## ADR-018: Full-Spectrum Rental Domain Model Review, Invariant Formalization, and Multi-Currency Standardization
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  A systematic, module-by-module relentless questioning review across all 18 functional modules in [`docs/BUSINESS_REQUIREMENTS.md`](file:///home/prosubodh/projects/sthanori/docs/BUSINESS_REQUIREMENTS.md) and [`docs/DOMAIN_ANALYSIS.md`](file:///home/prosubodh/projects/sthanori/docs/DOMAIN_ANALYSIS.md) resolved critical real-world edge cases, operational boundaries, and internationalization requirements:
+  1. *Spatial Hierarchy & Mutual Space Exclusion*: Pragmatic hybrid (`buildingBlock` string + `parentSpaceId` for co-living child rooms); strict aggregate validation preventing concurrent leases on parent units and child rooms.
+  2. *Renter Identity & Onboarding*: Scoped unique email per workspace; automated default portal account provisioning (`sendInviteImmediately: true`) with deferred suppression for paper leases.
+  3. *Proration Mechanics*: `IProrationStrategy` (`ActualCalendarDays` vs `Standard30Day`); configurable threshold (day 20) collecting full 1st month rent at inception with 2nd-month credit adjustment.
+  4. *RUBS Vacancy Allocation*: `IRubsVacancyAllocationPolicy` defaulting to statutory `LandlordAbsorbsVacantSharePolicy`, protecting active renters from illegal empty-unit cost shifting.
+  5. *Missing Meter Submissions*: `IMissingReadingPolicy` defaulting to `HistoricalAverageEstimatePolicy` (rolling 90-day daily average) with automated true-up on next verified reading.
+  6. *Move-Out Settlement Holdback*: Legally compliant two-stage settlement (`InterimMoveOutStatement` within 14/21 days) with configurable `HoldbackSunsetExpiryPolicy` (default 60 days).
+  7. *Ancillary Physical Inventory*: `AncillaryInventoryAssetAggregate` tracking finite physical parking/storage spaces with anti-double-booking guards and configurable mid-cycle proration (`IAncillaryProrationPolicy`).
+  8. *Concession Clawbacks & Early-Bird Discounts*: `IConcessionClawbackPolicy` (`ProRataClawbackPolicy` default vs `FullClawbackPolicy`); dynamic early-bird discount expiration based on payment arrival timestamp.
+  9. *Delinquency & Legal Holds*: Automatic engagement of `IsLegalHoldActive = true` upon statutory Notice to Pay or Quit service, rejecting partial payments to prevent accidental legal waiver.
+  10. *Tax Engine Precision*: Configurable `TaxCalculationMode` (`TAX_EXCLUSIVE` vs `TAX_INCLUSIVE`) with canonical line-item Banker's Rounding (half-even) in minor units.
+  11. *Roommate Split Invoicing Defaults*: `IRoommateDefaultPolicy` defaulting to `TargetedDefaulterPolicy` with joint co-tenant informational advisory notices.
+  12. *Multi-Currency Mandate (USD & NPR)*: Mandatory Day-1 multi-currency architecture supporting `USD` and `NPR` (Nepalese Rupee) stored in minor currency units (cents/paisa integers); Western and Vedic (lakhs/crores) number formatting.
+  13. *Payment Reversals & Unapplied Credits*: Immutable `PaymentReversalRecord` for NSF/bounced checks with automatic fee assessment and late fee re-evaluation; automated credit balance drawdowns.
+  14. *Maintenance Cost Attribution & Owner Limits*: Evidence-gated tenant chargebacks with mandatory technician notes and 5-day review window; `AuthorizedMaintenanceLimit` on `PropertyOwnerAggregate`.
+  15. *Deposit Escrow Interest & Move-In Baseline*: Configurable deposit interest (`NoDepositInterestPolicy` default); 7-day resident discovery window auto-locking Move-In inspections.
+  16. *Mid-Cycle Tariffs & Corporate Capacity*: `ITariffEffectiveDatePolicy` with weighted day-count pro-rata splitting; corporate active occupant capacity bound to `RentableSpaceAggregate.MaxOccupants`.
+
+- **Decision**:
+  Codified all 16 architectural invariants into `docs/BUSINESS_REQUIREMENTS.md` (Modules 1–18) and `docs/DOMAIN_ANALYSIS.md` (Sections 1–10).
+
+- **Rationale & Alternatives**:
+  - Eliminates all operational, legal, and financial ambiguities prior to writing code.
+  - Guarantees complete compliance with 12-factor cloud-native principles, Hexagonal Architecture, London School TDD, and multi-tenant PostgreSQL RLS.
+
+- **Consequences**:
+  - **Positive**: Zero ambiguity remains; comprehensive, battle-tested domain model ready for implementation; fully configured for international multi-currency operations (USD & NPR).
+  - **Trade-offs**: Rich domain models with numerous strategy interfaces, fully tested via mockist TDD.
+
+
 
 
 
