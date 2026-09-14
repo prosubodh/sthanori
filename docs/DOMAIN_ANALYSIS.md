@@ -576,3 +576,124 @@ Properties equipped with rooftop solar PV arrays generate distributed energy tha
   1. **`LandlordAbsorptionStrategy` (Default)**: Renters are billed strictly based on their individual sub-meter consumption evaluated against standard municipal utility tariff rates. All solar net-metering credits, green energy incentives, bulk master volume discounts, and line losses are retained/absorbed directly by the property owner.
   2. **`ProportionalPassThroughStrategy`**: Any net credits (or line loss surcharges) reflected on the utility company's master bill are distributed across active renters in proportion to each renter's share of total metered consumption during the billing period.
 
+---
+
+## 9. Move-In/Move-Out Condition Inspection & Wear-and-Tear Depreciation
+
+### 9.1 The Legal & Domain Problem: Wear-and-Tear vs. Tenant Damage
+
+Security deposit deductions are the single largest source of landlord-tenant friction and municipal small-claims litigation. Statutory property law worldwide mandates two key principles:
+1. **Normal Wear and Tear is Non-Deductible**: Natural deterioration resulting from everyday reasonable residential habitation (e.g. minor paint scuffs, carpet flattening along primary footpaths, sun fading of curtains) is a landlord operating expense. Deducting wear and tear from deposits is illegal.
+2. **Useful Life & Depreciation**: Landlords may not recover the full replacement cost of aged assets. If a 4-year-old carpet with a 5-year useful life is ruined by tenant negligence, the tenant is liable only for the **remaining useful life value** ($20\%$), not a brand new carpet.
+
+---
+
+### 9.2 `ConditionInspectionAggregate`
+
+- **Identity**: `InspectionId`, `SpaceId`, `LeaseId`, immutable `tenantId`.
+- **Properties**:
+  - `InspectionType`: `MOVE_IN` (baseline), `MID_LEASE_PERIODIC`, `MOVE_OUT` (final).
+  - `InspectionDate`: ISO 8601 timestamp.
+  - `Inspector`: `InspectorRole` (`LANDLORD`, `PROPERTY_MANAGER`, `THIRD_PARTY_INSPECTOR`), `InspectorId`, `InspectorName`.
+  - `RenterParticipation`: Attended in person (boolean), ReviewWindowExpiryDate (e.g. 7 days post-move-in).
+  - `SignatureBlock`:
+    - Inspector: `SignatureData`, `SignedAt`.
+    - Renter: `SignatureData`, `SignedAt`, `DeviceIp`, `UserAgent`.
+  - `InspectionStatus`: `DRAFT` $\to$ `PENDING_RENTER_REVIEW` $\to$ `MUTUALLY_ACCEPTED` | `DISPUTED_ARCHIVED`.
+- **Room Sections (`RoomInspectionSection`)**:
+  - `RoomType`: `LIVING_ROOM`, `KITCHEN`, `MASTER_BEDROOM`, `BEDROOM_SECONDARY`, `BATHROOM_MASTER`, `BATHROOM_GUEST`, `BALCONY_PATIO`, `HALLWAY_ENTRY`.
+  - `ChecklistItems`: Array of inspected elements:
+    - *Element Categories*: `WALLS_CEILING`, `FLOORING_CARPET`, `WINDOWS_BLINDS`, `DOORS_LOCKS`, `LIGHTING_ELECTRICAL`, `CABINETS_COUNTERTOPS`, `PLUMBING_FIXTURES`, `APPLIANCES`, `SMOKE_CO_DETECTORS`.
+    - *Condition*: `EXCELLENT`, `GOOD`, `FAIR`, `POOR`, `DAMAGED`.
+    - *Cleanliness*: `CLEAN`, `NEEDS_CLEANING`, `PROFESSIONAL_CLEAN_REQUIRED`.
+    - *Notes*: Inspector observations (e.g. "2-inch gouge on hardwood floor near west wall").
+    - *Evidence*: `PhotoUrls[]` with cryptographically verified EXIF timestamps and geo-hash metadata.
+
+---
+
+### 9.3 Inspection State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: Inspector begins walkthrough
+    DRAFT --> IN_PROGRESS: Logging room checklist & photos
+    IN_PROGRESS --> PENDING_RENTER_REVIEW: Walkthrough complete, sent to renter
+    PENDING_RENTER_REVIEW --> MUTUALLY_ACCEPTED: Renter accepts & e-signs
+    PENDING_RENTER_REVIEW --> OBJECTIONS_RAISED: Renter flags pre-existing flaws with counter-photos
+    OBJECTIONS_RAISED --> MUTUALLY_ACCEPTED: Landlord agrees to revisions & re-issues
+    OBJECTIONS_RAISED --> DISPUTED_ARCHIVED: Disagreements locked with both notes preserved
+    MUTUALLY_ACCEPTED --> ARCHIVED: Baseline locked for lease duration
+    DISPUTED_ARCHIVED --> ARCHIVED: Baseline locked for lease duration
+    ARCHIVED --> [*]
+```
+
+---
+
+### 9.4 `AssetDepreciationSchedule` & Straight-Line Depreciation Engine
+
+To prevent unlawful deposit withholding, Sthanori establishes an IRS/HUD-aligned asset useful life schedule:
+
+| Asset Category | Standard Useful Life | Depreciation Method | Examples of Tenant Damage (Depreciated) | Examples of Normal Wear (Zero Deduction) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Interior Paint** | 36 Months (3 Years) | Straight-Line Monthly | Large crayon drawings, unapproved dark colors, unauthorized wall anchors | Fading from sunlight, minor scuffs along baseboards |
+| **Standard Carpet** | 60 Months (5 Years) | Straight-Line Monthly | Pet urine stains, cigarette burns, large chemical bleach spills | Traffic lane matting, normal furniture indentations |
+| **Vinyl / Laminate** | 120 Months (10 Years)| Straight-Line Monthly | Deep water swelling from unreported pet bowl leaks, gouges | Minor superficial surface scuffs |
+| **Hardwood Flooring**| 240 Months (20 Years)| Straight-Line Monthly | Deep gouges from dragging metal furniture, dog claw shredding | Gentle gloss dulling in traffic paths |
+| **Window Blinds** | 36 Months (3 Years) | Straight-Line Monthly | Broken, bent, or chewed slats | Slight dust accumulation, cord wear |
+| **Kitchen Appliances**| 120 Months (10 Years)| Straight-Line Monthly | Cracked glass cooktop, broken crisper drawers due to impact | Motor failure, burner element burnout from age |
+| **Drywall / Doors** | Indefinite / 30 Years | Full Repair Recovery | Impact fist holes, door split at hinges | Minor nail holes (< 2mm) from hanging pictures |
+
+#### Mathematical Depreciation Formula:
+$$\text{AssetAgeMonths} = \text{MonthsBetween}(\text{AssetInstallDate}, \text{MoveOutDate})$$
+$$\text{DepreciationFactor} = \max\left(0, 1 - \frac{\text{AssetAgeMonths}}{\text{UsefulLifeMonths}}\right)$$
+$$\text{MaxAllowableTenantCharge} = \text{TotalRepairOrReplacementCost} \times \text{DepreciationFactor}$$
+
+*Worked Example*:
+- Tenant damages a 30-month-old carpet. Replacement quote is $\$1,200$.
+- Useful life: 60 months.
+- $\text{DepreciationFactor} = 1 - (30 / 60) = 0.50$ ($50\%$).
+- $\text{MaxAllowableTenantCharge} = \$1,200 \times 0.50 = \$600.00$.
+- Landlord absorbs the remaining $\$600.00$ as standard asset depreciation.
+
+---
+
+### 9.5 Automated Move-Out Comparison & Damage Dispute Aggregate
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Landlord
+    participant InspectionEngine as ConditionInspectionEngine
+    participant DepreciationEngine as DepreciationEngine
+    participant Escrow as SecurityDepositEscrowLedger
+    actor Renter
+
+    Note over Landlord,Renter: 1. Move-Out Inspection
+    Landlord->>InspectionEngine: Perform Move-Out Walkthrough
+    InspectionEngine->>InspectionEngine: Diff Move-Out vs Move-In Baseline
+    Note right of InspectionEngine: Detected Downgrade:<br/>Living Room Carpet: GOOD -> DAMAGED
+    InspectionEngine->>DepreciationEngine: Request Allowable Charge (Quote: $1,200, Age: 30 mo, Life: 60 mo)
+    DepreciationEngine-->>InspectionEngine: Max Allowable Charge: $600.00 (50% Depreciated)
+    InspectionEngine->>Escrow: Append Itemized Deduction ($600.00)
+    Escrow->>Renter: Issue Move-Out Settlement Statement with Evidence Photos
+    
+    alt Renter Accepts Settlement
+        Renter->>Escrow: Acknowledges Statement
+        Escrow->>Renter: Disburse Net Refund ($1,400.00)
+    else Renter Disputes Deduction
+        Renter->>Escrow: File Dispute (Provides photo showing stain was pre-existing)
+        Escrow->>Landlord: Notify Dispute with Statutory Clock (14 Days)
+        Landlord->>Escrow: Concede $300.00 / Re-issue Statement
+        Escrow->>Renter: Disburse Revised Net Refund ($1,700.00)
+    end
+```
+
+- **`DamageDisputeAggregate`**:
+  - `DisputeId`, `EscrowLedgerId`, `LeaseId`, immutable `tenantId`.
+  - `DeductionLineItemId`: References specific contested item on MoveOutSettlementStatement.
+  - `RenterClaim`: Rebuttal description, counter-evidence photo URLs, proposed reduction amount.
+  - `StatutoryDeadline`: Date before which landlord must respond to avoid statutory forfeiture penalties (e.g. 14–21 days).
+  - `ResolutionStatus`: `SUBMITTED` $\to$ `UNDER_REVIEW` $\to$ `CONCEDED_IN_FULL` | `PARTIALLY_CONCEDED` | `UPHELD_REJECTED`.
+  - `FinancialAdjustment`: Automated credit memo adjusting the deposit escrow settlement balance.
+
+

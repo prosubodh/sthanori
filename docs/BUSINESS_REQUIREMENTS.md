@@ -145,7 +145,16 @@
 - **FR-16.4**: The system must support cascading meter hierarchies (Master Meter $\to$ Building Sub-stations $\to$ Unit & CAM Sub-meters) with automated line-loss variance auditing ($>5\%$ discrepancy trigger).
 - **FR-16.5**: The system must support configurable solar net-metering and master bill reconciliation via `IUtilityDiscrepancyStrategy` (`LandlordAbsorptionStrategy` vs. `ProportionalPassThroughStrategy`).
 
+### Module 17: Move-In/Move-Out Inspections & Wear-and-Tear Depreciation
+- **FR-17.1**: The system must support digital condition inspection walkthroughs (`MOVE_IN`, `MID_LEASE_PERIODIC`, `MOVE_OUT`) structured by room areas and sub-element checklists.
+- **FR-17.2**: Inspections must capture conditions (`EXCELLENT`, `GOOD`, `FAIR`, `POOR`, `DAMAGED`), cleanliness notes, and timestamped photo evidence.
+- **FR-17.3**: The system must support e-signatures with review time windows and tenant dispute/rebuttal workflows.
+- **FR-17.4**: The system must enforce an IRS/HUD-aligned `AssetDepreciationSchedule` evaluating straight-line monthly depreciation for damaged finishes/appliances, legally bounding tenant chargebacks to remaining useful life value.
+- **FR-17.5**: The system must provide automated Move-Out diffing (comparing move-out condition against move-in baseline) and feed itemized depreciated deductions directly into `SecurityDepositEscrowLedger.MoveOutSettlementStatement`.
+- **FR-17.6**: The system must support `DamageDisputeAggregate` tracking formal renter rebuttals with statutory response clocks (14–21 days) and automated credit memo adjustments.
+
 ---
+
 
 
 ## 4. Non-Functional Requirements (NFR)

@@ -543,6 +543,41 @@
   - **Positive**: Full-spectrum market readiness for residential complexes, commercial retail/office buildings, and co-living operators with complex utility structures; automated leak and line-loss detection; fair sewer and solar accounting.
   - **Trade-offs**: Requires building tier validation and time-window resolution in domain services.
 
+---
+
+## ADR-016: Move-In/Move-Out Condition Inspection, Useful-Life Depreciation Engine, and Deposit Dispute Resolution
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Security deposit deductions represent the most contentious and legally sensitive workflow in rental property operations:
+  1. *Statutory Protection for Normal Wear and Tear*: Property legislation strictly prohibits charging tenants for reasonable deterioration resulting from everyday living (e.g. minor paint scuffing, carpet flattening in traffic pathways).
+  2. *Useful Life & Unlawful Replacement Charges*: Landlords cannot legally charge full replacement costs for aged property finishes. If a tenant ruins a 4-year-old carpet with a 5-year useful life, the tenant is only liable for the remaining $20\%$ useful value.
+  3. *Evidence Defensibility*: Enforceable move-out deductions require unambiguous photographic and checklist evidence contrasting move-in baseline condition against move-out condition.
+  4. *Dispute Resolution & Statutory Clocks*: Tenants must have a structured mechanism to rebut itemized deductions with counter-evidence within strict jurisdictional response deadlines (14–21 days) to prevent statutory bad-faith penalties.
+
+- **Decision**:
+  1. **New Aggregates & Value Objects**:
+     - `ConditionInspectionAggregate`: Captures walkthrough inspections (`MOVE_IN`, `MID_LEASE_PERIODIC`, `MOVE_OUT`) structured by room areas (`LIVING_ROOM`, `KITCHEN`, `BEDROOM`, `BATHROOM`, etc.) and element categories (`WALLS_CEILING`, `FLOORING_CARPET`, `WINDOWS_BLINDS`, `APPLIANCES`, etc.), storing condition grades, cleanliness ratings, timestamped photo URLs, and inspector/renter e-signatures.
+     - `AssetDepreciationSchedule`: IRS/HUD-aligned useful life catalog (Paint: 36 mo, Carpet: 60 mo, Vinyl/Laminate: 120 mo, Hardwood: 240 mo, Appliances: 120 mo, Drywall: Indefinite) driving straight-line monthly depreciation formulas.
+     - `DamageDisputeAggregate`: Formal dispute lifecycle tracking contested deduction lines, renter rebuttal narratives, counter-evidence photos, statutory response deadlines, and settlement credit memo adjustments.
+  2. **Automated Diffing & Settlement Integration**:
+     - The inspection engine automatically diffs move-out conditions against move-in baselines.
+     - For any downgraded item, repair estimates are fed into the depreciation engine to calculate `MaxAllowableTenantCharge` ($\text{Cost} \times (1 - \text{Age} / \text{UsefulLife})$).
+     - Resulting depreciated charges feed directly into `SecurityDepositEscrowLedger.MoveOutSettlementStatement`.
+  3. **Documentation Assets**:
+     - Updated [`docs/DOMAIN_ANALYSIS.md`](file:///home/prosubodh/projects/sthanori/docs/DOMAIN_ANALYSIS.md) (Section 9).
+     - Updated [`docs/BUSINESS_REQUIREMENTS.md`](file:///home/prosubodh/projects/sthanori/docs/BUSINESS_REQUIREMENTS.md) (Module 17).
+
+- **Rationale & Alternatives**:
+  - *Depreciation Rigor*: Building asset depreciation directly into the domain model guarantees compliance with jurisdictional deposit laws and protects property managers from tenant litigation.
+  - *Strategy Pattern*: Keeps dispute workflows and depreciation formulas modular and auditable.
+
+- **Consequences**:
+  - **Positive**: 100% legal compliance for deposit accounting; automated dispute tracking with statutory countdowns; seamless move-in to move-out condition diffing.
+  - **Trade-offs**: Requires rich checklist modeling and photo asset links.
+
+
 
 
 
