@@ -211,3 +211,37 @@
 - **Consequences**:
   - **Positive**: Domain Core stays 100% pure; new tenant variations can be introduced by adding a new Strategy class without modifying existing strategies; testing is clean, fast, and deterministic; enables instant rollback or targeted canary rollout per tenant.
   - **Trade-offs**: Requires defining a strategy interface, factory, and flag mapping for each divergent workflow.
+
+---
+
+## ADR-008: Universal Stack Agnosticism, Explicit SOLID Invariants, and the DRY vs. AHA Balance
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  A universal agent operating standard must remain 100% portable across programming languages (TypeScript, Python, Go, Rust, C#, Java) and framework ecosystems. Additionally, the relationship between classical software engineering principles (SOLID, GoF Design Patterns, DRY) and multi-tenant domain modeling requires precise codification:
+  1. *Stack Agnosticism*: Clarify that tool references (e.g. PostgreSQL, Redis, MinIO, Mailpit) represent canonical development reference implementations for local parity, not mandatory language/driver lock-in.
+  2. *SOLID & GoF Alignment*: Explicitly enforce how Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, and Dependency Inversion govern hexagonal boundaries.
+  3. *DRY vs. AHA*: Distinguish between invariant single sources of truth (validation, entities) and premature DRY across conflicting tenant business logic.
+
+- **Decision**:
+  1. **Strict Stack Agnosticism**:
+     - No framework, library, or programming language is assumed.
+     - Capability modules specify behavioral contracts and reference parities; concrete implementations are chosen on-demand based on stack-native idioms.
+  2. **Codification of SOLID Invariants**:
+     - **SRP**: Clean segregation between Identity, RBAC, Entitlements, Metering, and Billing.
+     - **OCP**: Domain Core is closed to modification (banning `if (tenant.id === '...')`), open to extension via Domain Strategies.
+     - **LSP**: All ports must have 100% interchangeable in-memory test doubles and production adapters.
+     - **ISP**: Fine-grained, segregated ports (`IFeatureFlagPort`, `IEntitlementPort`, `IBillingAdapter`).
+     - **DIP**: Domain Core depends purely on owned abstractions; infrastructure depends on Domain Core.
+  3. **AHA (Avoid Hasty Abstractions) over Premature DRY**:
+     - DRY applies strictly to domain business invariants and database schema migrations.
+     - Premature DRY across divergent tenant workflows is forbidden: duplication is far cheaper than the wrong abstraction. Conflicting tenant requirements are modeled via independent Domain Strategy classes.
+
+- **Rationale & Alternatives**:
+  - *Alternative Considered (Prescribing a specific stack)*: Rejected because `AGENTS.md` is designed as a universal standard adaptable to any tech stack.
+  - *Alternative Considered (Aggressive DRY across all tenant code)*: Rejected because attempting to share a single workflow class across divergent enterprise clients leads to tangled boolean parameters and regression nightmares.
+
+- **Consequences**:
+  - **Positive**: Complete portability across tech stacks; rock-solid architectural foundations; prevents abstraction hell in enterprise customization; aligns mockist TDD with classical engineering rigor.
+  - **Trade-offs**: Requires discipline to resist combining similar-looking tenant strategies prematurely.

@@ -26,6 +26,9 @@
 - **SCIM**: System for Cross-domain Identity Management: open standard REST API automating user and group provisioning from enterprise IdPs (Okta, Entra ID).
 - **Impersonation**: Temporary, dual-audited authentication allowing authorized support staff to operate within a tenant workspace without credential sharing.
 - **Hierarchical Tenancy**: Multi-tier tenant structure allowing parent organizations to manage pooled commercial entitlements and policies across child workspaces.
+- **SOLID & GoF Patterns**: Architectural foundation (Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion) combined with GoF patterns (Adapter, Strategy, Factory, State, Repository).
+- **DRY vs. AHA**: Single source of truth for business invariants (DRY) balanced against Avoid Hasty Abstractions (AHA): duplication across divergent tenant workflows is far cheaper than the wrong abstraction.
+- **Stack Agnosticism & Reference Parity**: Protocol is 100% stack-, language-, and framework-neutral. References to specific tools (PostgreSQL, Redis, MinIO) represent canonical local dev reference implementations, not mandatory technology lock-in.
 - **Strict YAGNI ("You Aren't Gonna Need It")**: Absolute prohibition against scaffolding infrastructure, dependencies, or architectural ports for capabilities that have not been explicitly requested.
 - **Capability-Triggered Architecture (Just-In-Time)**: Activating specialized technical architectures (storage, queues, billing, search, real-time) only upon an explicit domain requirement or tenant contract trigger.
 
@@ -70,6 +73,13 @@
 - **Pure Constructor DI & Composition Root**: Pass dependencies explicitly into constructors or factory functions. Assemble the dependency graph at the application Composition Root. Avoid heavy reflection/runtime DI containers unless framework-native.
 - **Automated Architecture Boundaries (Hexagonal)**: Enforce automated dependency graph linting in pre-commit/CI. Dependencies point strictly inward: Domain Core (zero dependencies) $\leftarrow$ Application (use cases + owned ports) $\leftarrow$ Adapters (infrastructure). Transport/UI calls Application. `packages/shared` must remain pure/isomorphic (no server/browser/ORM imports). Frontend and Backend workspaces may never import from each other. Zero circular dependencies allowed.
 - **Absolute Ban on Tenant-ID Conditionals**: Hardcoded tenant branching (`if (tenant.id === '...')`) is strictly forbidden in Domain Core. Conflicting tenant requirements must be resolved via the **Strategy Pattern**, **Domain Policy Factories**, or **Extension Hooks** resolved at the application boundary.
+- **SOLID & Design Patterns Invariants**:
+  - *Single Responsibility (SRP)*: Pure use cases and segregated ports; identity, RBAC, entitlements, and billing never share contracts.
+  - *Open/Closed (OCP)*: Domain Core is open for extension via Domain Strategies, closed for modification (zero tenant branching).
+  - *Liskov Substitution (LSP)*: All ports have 100% interchangeable in-memory test doubles and production adapters.
+  - *Interface Segregation (ISP)*: Granular, client-specific ports; never combine distinct capabilities into monolithic interfaces.
+  - *Dependency Inversion (DIP)*: High-level Domain Core depends solely on abstractions (owned ports); infrastructure depends on domain.
+  - *DRY vs. AHA*: Strictly DRY on business invariants, validation schemas, and migrations. Explicitly avoid premature DRY (AHA - Avoid Hasty Abstractions) across divergent tenant workflows: duplication is far cheaper than the wrong abstraction.
 - **Mandatory 100.00% Coverage Gate**: Enforce 100.00% coverage (lines, branches, functions, statements) via the stack's native coverage runner. Test all HTTP status codes (2xx, 4xx, 5xx), UI interaction states, and boundary/error edge cases.
 
 ---
