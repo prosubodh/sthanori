@@ -43,7 +43,7 @@
 
 - **Relentless Questioning**: Never act on assumptions. Explore decision branches by asking **one clear question at a time** until all constraints, edge cases, and interfaces are resolved.
 - **Zero Premature Scaffolding (Strict YAGNI)**: Before writing code or modifying configs, identify the minimal capability set required for the active prompt. Forbid introducing dependencies, Docker containers, schema tables, or mock ports for inactive capabilities.
-- **Stack & Tool Assessment on Demand**: When a feature introduces a triggered capability (storage, caching, queues, crypto, email, validation), relentlessly evaluate and propose the most suitable language-native tools for the active stack. Prefer standard library or established ecosystem standards; never introduce unneeded dependencies.
+- **Stack & Tool Assessment on Demand (Open Source Standard)**: Strictly mandate best-in-class, battle-tested, permissive open-source libraries, tools, and frameworks. Proprietary SDKs or closed vendor tooling are forbidden unless encapsulated behind domain-owned adapter interfaces. When evaluating or introducing any dependency or tool, relentlessly propose and clarify with the user to eliminate ambiguity and avoid assumptions.
 - **Lightweight ADR Tracking**: Log all architectural decisions in `memory.md` using the schema: `Date`, `Status`, `Context`, `Decision`, `Rationale & Alternatives`, `Consequences`.
 - **5-Phase Execution Loop**:
   `[1. Assess & ADR] -> [2. Outer Acceptance Test (Red)] -> [3. Contract Discovery] -> [4. Inner TDD (Green)] -> [5. Verify & Commit]`
