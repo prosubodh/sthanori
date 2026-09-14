@@ -680,6 +680,40 @@
   - **Positive**: 100% native market readiness for Nepal and international operations; legally recognized documents for local ward offices; seamless dual calendar support.
   - **Trade-offs**: Requires bundling or implementing astronomical Bikram Sambat tables (1970–2100 BS) in an owned infrastructure adapter.
 
+---
+
+## ADR-020: 4-Phase Implementation Sequencing, MVP Boundary Definition, and 25 Single Deployable Units
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Translating the 19 comprehensive business requirement modules into actionable, risk-mitigated development units required establishing a clear MVP boundary and end-to-end prioritization. Key architectural constraints:
+  1. *Single Deployable Unit Requirement*: Every roadmap issue must represent a full-stack vertical slice delivering tangible business value on its own (never a decoupled technical horizontal layer like \"create DB schema\").
+  2. *MVP Operational Anchor*: Identifying the core monetization loop for independent landlords without premature complexity from advanced commercial or multi-tiered utility models.
+  3. *Sequential Dependency Graph*: Aligning dependencies so that each phase builds upon immutable, tested preceding aggregates.
+
+- **Decision**:
+  1. **MVP Scope (Phase 1: Issues #1 to #9)**:
+     - Anchor Day-1 MVP strictly on the residential landlord operational loop: Property/Space Catalog (#1), Renter Directory (#2), Core Leases & Proration (#3), Multi-Currency & BS/AD Dual Calendar (#4), Direct Sub-Metering & Flat Utility Fee (#5), Security Deposit Escrow (#6), Monthly Invoicing & Late Fees (#7), Offline Payment Recording & Immutable Receipts (#8), and Landlord Operational Hub (#9).
+  2. **Phase 2: Operations & Resident Portal (Issues #10 to #15)**:
+     - Resident Self-Service Portal (#10), Renter Meter Photo Uploads & Verification (#11), Co-Living & Roommate Split Billing (#12), Maintenance Work Orders & Tenant Chargebacks (#13), Nepali Devanagari UI & Bilingual Documents (#14), and Delinquency Notices & Legal Holds (#15).
+  3. **Phase 3: Inventory, Inspections & Disbursements (Issues #16 to #20)**:
+     - Ancillary Physical Inventory (#16), Concessions & Early-Bird Incentives (#17), Condition Inspections & Useful-Life Depreciation (#18), Two-Stage Move-Out Utility Settlement (#19), and Property Owner Disbursements (#20).
+  4. **Phase 4: Enterprise, Commercial & Online Payments (Issues #21 to #25)**:
+     - Commercial Real Estate & RUBS (#21), Tax & VAT Engine (#22), Advanced Multi-Utility Tariffs (#23), Guarantors & Corporate Leases (#24), and Online Payment Gateways (#25).
+  5. **Repository Synchronization**:
+     - Created and pushed all 25 issues sequentially to GitHub repository \`prosubodh/sthanori\` (Issues #1 through #25) with \`phase:*\` and \`scope:deployable-unit\` labels.
+     - Documented the canonical execution specification in [\`docs/PRIORITIZED_ISSUES_BACKLOG.md\`](file:///home/prosubodh/projects/sthanori/docs/PRIORITIZED_ISSUES_BACKLOG.md).
+
+- **Rationale & Alternatives**:
+  - *Slicing Strategy*: Vertical slices guarantee early user feedback, continuous deployment, and verifiable business value at every step.
+  - *Strict YAGNI*: Keeps initial infrastructure lean while guaranteeing clean extension points for subsequent phases.
+
+- **Consequences**:
+  - **Positive**: Clear, immutable roadmap; zero ambiguity on Day-1 MVP vs post-MVP priorities; issues live in GitHub for tracking and sprint assignment.
+  - **Trade-offs**: Requires disciplined execution of Phase 1 before branching into Phase 2 capabilities.
+
+
 
 
 
