@@ -468,6 +468,46 @@
   - **Positive**: Complete real-world market readiness for residential complexes, co-living operators, and commercial management companies; auditable fiduciary accounting; automated leak and typo detection.
   - **Trade-offs**: Expands the domain model to include work orders and owner disbursements alongside leases and utility meters.
 
+---
+
+## ADR-014: Advanced Rental Billing Domain Architecture: Renter Meter Submissions, Move-Out Settlements, Ancillary Services, Concessions, Delinquency Plans, and Tax Engine
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Operating real estate rental portfolios involves continuous edge cases across the resident lifecycle: utility billing lags during mid-month move-outs, self-service meter reading submissions, ancillary fee monetization, promotional discounts, rent delinquency, and local tax compliance. These required domain formalization to ensure clean DDD aggregates and eliminate hardcoded branching:
+  1. *Move-Out Utility Settlement*: Municipal utility bills often arrive 30 days after a tenant vacates, creating tension with statutory security deposit refund deadlines (14–21 days).
+  2. *Renter Meter Submission with Photo Proof*: Self-managed landlords need residents to submit sub-meter dial photos directly to avoid inspection overhead while preventing disputes.
+  3. *Ancillary Add-ons & Incidental Fees*: Monetizing parking spaces (including metered EV charging), pet rent, storage units, and valet trash via recurring lease attachments.
+  4. *Concessions & Payment Incentives*: Upfront free months, amortized net effective rent discounts with clawback terms, and early-bird payment discounts.
+  5. *Delinquency & Eviction Workflows*: Statutory legal notices, installment repayment agreements, and legal holds that block partial payments to protect active eviction filings.
+  6. *Tax & VAT/GST Compliance*: Evaluating line-item taxability across exempt residential rent, taxable commercial leases, parking surcharges, and utility user taxes.
+
+- **Decision**:
+  1. **New Aggregates & Value Objects**:
+     - `MeterReadingSubmissionAggregate`: Submitter role (`RENTER` | `LANDLORD` | `TECHNICIAN`), photo proof URL, reading values, and verification review lifecycle.
+     - `AncillaryServiceLedger`: Attached recurring add-ons (parking, pets, storage, valet trash) generating automated monthly invoice lines, plus one-off incidentals.
+     - `ConcessionSchedule`: Upfront free months or monthly amortized discounts with early-termination clawback conditions.
+     - `RepaymentPlanAggregate`: Tracking structured installment agreements for delinquent arrears with monthly installment billing.
+     - `LegalHoldFlag`: Fiduciary guard on renter accounts blocking partial payments during legal/eviction actions.
+  2. **Configurable Strategy Extensions**:
+     - `IFinalUtilitySettlementStrategy`: `FinalPhysicalMeterReadingStrategy`, `HistoricalDailyAverageStrategy`, and `TemporaryEscrowHoldbackStrategy`.
+     - `ITaxCalculationStrategy`: Evaluating line-item taxability across jurisdictions (exempt residential vs. taxable commercial/ancillary).
+     - `IConcessionStrategy`: Managing upfront vs. amortized concession applications.
+  3. **Documentation Assets**:
+     - Synchronized comprehensive domain models, state machines, and bounded contexts in [`docs/DOMAIN_ANALYSIS.md`](file:///home/prosubodh/projects/sthanori/docs/DOMAIN_ANALYSIS.md).
+     - Expanded functional requirements to 15 modules in [`docs/BUSINESS_REQUIREMENTS.md`](file:///home/prosubodh/projects/sthanori/docs/BUSINESS_REQUIREMENTS.md).
+
+- **Rationale & Alternatives**:
+  - *Self-Service Meter Photo Ingestion*: Eliminates landlord friction for nearby/self-managed setups while providing tamper-evident audit trails.
+  - *Move-Out Settlement Flexibility*: Gives landlords legal options (holdback vs. historical estimation) based on local tenancy legislation.
+  - *Strategy Pattern*: Ensures zero tenant conditionals in domain core; all variations configured via feature flags and policy factories.
+
+- **Consequences**:
+  - **Positive**: Complete coverage of real-world rental billing complexities; legally sound eviction and deposit workflows; maximized ancillary revenue tracking; total clarity for implementation.
+  - **Trade-offs**: Requires building rich validation rules and multi-party workflows (renter submission $\to$ landlord review).
+
+
 
 
 

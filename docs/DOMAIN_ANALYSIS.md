@@ -6,7 +6,7 @@
 
 1. **Multi-Property & Multi-Unit Residential**: Traditional apartment buildings, duplexes, and single-family rental complexes where individual units/apartments are leased to residents with sub-meters, flat fees, or proportional utility allocations.
 2. **Shared Housing / Co-living**: Houses or large apartments where individual private bedrooms are leased to occupants/roommates who share common utilities (electricity, high-speed WiFi, water, cleaning) split equally or by custom allocation ratios.
-3. **Commercial Real Estate**: Office buildings, medical suites, and retail storefronts leased to commercial business entities with Ratio Utility Billing System (RUBS) calculations based on square footage, Common Area Maintenance (CAM) reconciliations, and commercial lease covenants.
+3. **Commercial Real Estate**: Office buildings, medical suites, and retail storefronts leased to commercial business entities with Ratio Utility Billing System (RUBS) calculations based on square footage, Common Area Maintenance (CAM) reconciliations, value-added taxes (VAT/sales tax), and commercial lease covenants.
 
 ---
 
@@ -39,14 +39,24 @@ To eliminate ambiguity across business stakeholders and engineering teams, the f
 | **Security Deposit** | Funds collected at lease inception held in escrow to guarantee against property damage or default. | Escrow Liability |
 | **Escrow Account** | Dedicated bank account segregating tenant deposit liabilities from operational cash. | Fiduciary Ledger |
 | **Statutory Interest** | Jurisdictional interest accrued on held deposits payable or creditable to the renter. | Accrued Liability |
+| **Move-Out Settlement** | Final reconciliation statement balancing deposits against unpaid rent, utilities, and repair damages. | Closing Statement |
 | **Utility** | An ongoing service (electricity, water, gas, internet, trash) consumed in a space. | Service Resource |
 | **Sub-Meter** | A physical or virtual measurement device dedicated to a single rentable space tracking usage units. | Metering Device |
+| **Physical Unit of Measure**| Physical metric: `KWH` (electric), `GALLONS` / `CUBIC_METERS` / `CCF` (water), `THERMS` (gas), `MBPS` (internet). | Standard Measurement |
+| **Meter Submission** | Self-service meter reading uploaded by a renter with mandatory photographic dial evidence. | Ingestion Record |
 | **Master Bill** | A consolidated utility invoice issued by a city or utility provider for an entire property. | Aggregated Cost |
 | **CAM (Common Area Maint.)**| House utility & maintenance expenses for shared spaces (hallway lighting, lobby HVAC, elevators). | Operational Cost |
 | **RUBS (Ratio Utility Billing)**| Mathematical formula distributing a master bill across units based on square footage or occupant count. | Allocation Algorithm |
-| **Spike Anomaly Alert** | Flag triggered when a meter reading deviates significantly from historical rolling averages. | Verification Gate |
+| **Spike Anomaly Alert** | Flag triggered when a meter reading deviates significantly from historical rolling averages (>200%). | Verification Gate |
 | **Maintenance Work Order** | Operational ticket tracking repair requests, technician dispatch, parts costs, and labor. | Maintenance Context |
 | **Tenant Chargeback** | Maintenance expense billed directly to renter's invoice due to tenant negligence or damages. | Invoiced Cost |
+| **Ancillary Service / Add-on**| Recurring non-rent lease service: Parking space, Pet rent, Storage locker, Valet trash, EV charging. | Ancillary Revenue |
+| **Incidental Fee** | One-time administrative or operational charge: Lockout fee, key fob replacement, returned check fee. | One-time Fee |
+| **Concession** | Promotional discount: Upfront (e.g. 1st month free) or Amortized across lease with clawback terms. | Rent Concession |
+| **Early-Bird Discount** | Small incentive discount (e.g. $25) applied if rent is tendered before a designated early date. | Payment Incentive |
+| **Delinquency Notice** | Statutory legal notice ("Notice to Pay or Quit") demanding payment of arrears within statutory days. | Legal Workflow |
+| **Repayment Plan** | Binding installment agreement allowing delinquent renters to pay arrears over time alongside rent. | Debt Restructuring |
+| **Legal Hold** | Account flag blocking partial payments during active legal/eviction proceedings. | Enforcement Gate |
 | **Rental Invoice** | Periodic billing statement detailing base rent, itemized utilities, recurring fees, and adjustments. | Financial Statement |
 | **Split Invoicing** | Splitting a single joint-and-several lease invoice into individualized roommate bills. | Multi-Renter Strategy |
 | **Payment Waterfall** | Priority hierarchy governing how partial payments are allocated across invoice line items. | Accounting Protocol |
@@ -63,6 +73,7 @@ flowchart TD
         Property["Property Aggregate"]
         RentableSpace["Rentable Space Aggregate"]
         PropertyOwner["Property Owner Aggregate"]
+        AncillaryCatalog["Ancillary Services Catalog (Parking/Storage/Pets)"]
     end
 
     subgraph LeaseManagementContext["2. Lease & Tenancy Context"]
@@ -70,11 +81,13 @@ flowchart TD
         RenterProfile["Renter Profile Aggregate"]
         SecurityDeposit["Security Deposit Escrow Ledger"]
         RenewalWorkflow["Lease Renewal Workflow"]
+        ConcessionSchedule["Concession & Discount Engine"]
     end
 
     subgraph UtilityMeteringContext["3. Utility & Metering Context"]
         UtilityMeter["Utility Meter Aggregate"]
         MasterUtilityBill["Master Utility Bill"]
+        MeterSubmission["Renter/Technician Meter Submission (Photo Proof)"]
         UtilityEngine["Utility Calculation Engine (CAM & RUBS)"]
         AnomalyDetector["Spike & Roll-over Anomaly Guard"]
     end
@@ -85,8 +98,15 @@ flowchart TD
         CostAttribution["Cost Attribution (Owner vs Chargeback)"]
     end
 
-    subgraph InvoicingContext["5. Billing & Invoicing Context"]
+    subgraph DelinquencyContext["5. Delinquency & Legal Context"]
+        NoticeToQuit["Statutory Notice to Pay or Quit"]
+        RepaymentPlan["Installment Repayment Plan Aggregate"]
+        LegalHold["Legal Hold (Block Partial Payments)"]
+    end
+
+    subgraph InvoicingContext["6. Billing & Invoicing Context"]
         RentalInvoice["Rental Invoice Aggregate"]
+        TaxEngine["Tax & VAT Calculation Engine"]
         RoommateSplit["Roommate Split Billing Engine"]
         PaymentAllocation["Payment Allocation Waterfall"]
         OwnerDisbursement["Owner Disbursement Ledger"]
@@ -96,8 +116,10 @@ flowchart TD
     PropertyCatalogContext --> UtilityMeteringContext
     PropertyCatalogContext --> MaintenanceContext
     LeaseManagementContext --> InvoicingContext
+    LeaseManagementContext --> DelinquencyContext
     UtilityMeteringContext --> InvoicingContext
     MaintenanceContext --> InvoicingContext
+    DelinquencyContext --> InvoicingContext
 ```
 
 ---
@@ -128,10 +150,11 @@ flowchart TD
 
 ### 4.4 `RenterProfileAggregate`
 - **Identity**: `RenterId`, immutable `tenantId`.
-- **Properties**: PrimaryName, ContactEmail, ContactPhone, `RenterType` (`RESIDENTIAL_RESIDENT`, `CO_LIVING_OCCUPANT`, `COMMERCIAL_CLIENT`), TaxOrBusinessId (for commercial), EmergencyContacts, CreditBalance.
+- **Properties**: PrimaryName, ContactEmail, ContactPhone, `RenterType` (`RESIDENTIAL_RESIDENT`, `CO_LIVING_OCCUPANT`, `COMMERCIAL_CLIENT`), TaxOrBusinessId (for commercial), EmergencyContacts, CreditBalance, `IsLegalHoldActive` (boolean).
 - **Invariants**:
   - Email format must be validated via standard email regex schema.
   - Credit balance represents overpayments and must be automatically applied to future invoices.
+  - When `IsLegalHoldActive` is true, partial payments are strictly rejected.
 
 ### 4.5 `LeaseAgreementAggregate`
 - **Identity**: `LeaseId`, `SpaceId`, immutable `tenantId`.
@@ -140,6 +163,9 @@ flowchart TD
   - Dates: `StartDate`, `EndDate` (nullable if month-to-month), `MoveInDate`, `MoveOutDate`.
   - Financial Terms: BaseRentAmount, Currency, BillingCycleDay (e.g., 1st), PaymentGracePeriodDays.
   - `RentEscalationSchedule`: Scheduled future rent adjustments: `[{ effectiveDate: string, newAmount: number, reason: string }]`.
+  - `AncillaryServices`: Attached recurring add-ons (Parking, Pet Rent, Storage, EV Charging, Valet Trash).
+  - `ConcessionPlan`: Upfront free months or monthly amortized discounts with early-termination clawback terms.
+  - `EarlyBirdIncentive`: Optional discount amount if paid on/before specified day of prior month.
   - Security Deposit: AmountRequired, AmountPaid, Status (`PENDING`, `HELD_IN_ESCROW`, `SETTLED`).
   - Lifecycle Status: `DRAFT`, `PENDING_APPROVAL`, `ACTIVE`, `UNDER_NOTICE`, `EXPIRED`, `MONTH_TO_MONTH`, `TERMINATED`, `CLOSED`.
 - **Invariants**:
@@ -147,7 +173,18 @@ flowchart TD
   - Base rent must be represented as a positive integer in minor currency units (e.g. cents).
   - Roommate split percentages (if configured) must sum exactly to 100.00%.
 
-### 4.6 `SecurityDepositEscrowLedger`
+### 4.6 `MeterReadingSubmissionAggregate`
+- **Identity**: `SubmissionId`, `MeterId`, `SpaceId`, immutable `tenantId`.
+- **Properties**:
+  - Submitter: `SubmitterRole` (`RENTER` | `LANDLORD` | `TECHNICIAN`), `SubmitterId`.
+  - ReadingData: MeterReadingValue, UnitOfMeasure (`KWH`, `GALLONS`, `CUBIC_METERS`, `CCF`, `THERMS`), ReadingDate.
+  - Evidence: PhotoProofUrl (mandatory for renter submissions), Timestamp, DeviceMetadata.
+  - Verification: Status (`SUBMITTED`, `VERIFIED_BY_LANDLORD`, `FLAGGED_SPIKE`, `DISPUTED`, `REJECTED`, `INVOICED`), VerificationDate, ReviewerNotes.
+- **Invariants**:
+  - Submissions by renters require a valid photo URL.
+  - Readings flagged as `FLAGGED_SPIKE` (>200% rolling average) cannot be invoiced without explicit supervisor verification.
+
+### 4.7 `SecurityDepositEscrowLedger`
 - **Identity**: `EscrowLedgerId`, `LeaseId`, immutable `tenantId`.
 - **Deposit Breakdown**: Itemized lines by category:
   - `SECURITY_DEPOSIT` (general damage/rent default)
@@ -156,16 +193,8 @@ flowchart TD
   - `ADVANCE_LAST_MONTH_RENT` (prepaid final month rent)
 - **Properties**: EscrowBankAccountId, TotalCollected, AccruedInterestAmount, StatutoryInterestRatePct, Status (`HELD_IN_ESCROW`, `RECONCILING`, `SETTLED`).
 - **Move-Out Settlement (`MoveOutSettlementStatement`)**:
-  - Itemized deductions: Unpaid Rent, Outstanding Utilities, Repair Damages (with photos/work order IDs), Cleaning Fees.
+  - Itemized deductions: Unpaid Rent, Outstanding Utilities (final sub-meter or escrow holdback), Repair Damages (linked Work Order IDs), Cleaning Fees.
   - Settlement Formula: $\text{NetRefund} = \text{TotalCollected} + \text{AccruedInterest} - \text{TotalDeductions}$.
-
-### 4.7 `UtilityMeterAggregate` & Master Bills
-- **Identity**: `MeterId`, `SpaceId` (or `PropertyId` for master meter), immutable `tenantId`.
-- **Properties**: `UtilityType` (`ELECTRICITY`, `WATER`, `GAS`, `INTERNET`, `TRASH`), SerialNumber, `BillingModel` (`SUB_METER`, `EQUAL_SPLIT`, `RUBS_SQFT`, `RUBS_OCCUPANTS`, `FLAT_FEE`), UnitRate, `CamAllowancePct` (e.g. 10% deducted for common areas).
-- **Reading History**: `MeterReading` (ReadingDate, MeterValue, ProofPhotoUrl, InspectorId, `AnomalyStatus`: `NORMAL` | `FLAGGED_SPIKE` | `VERIFIED`).
-- **Invariants**:
-  - If current reading < previous reading, requires explicit `MeterResetFlag` or is rejected.
-  - If current consumption exceeds 200% of rolling 3-reading average, flagged as `FLAGGED_SPIKE` requiring supervisor approval before invoice generation.
 
 ### 4.8 `MaintenanceWorkOrderAggregate`
 - **Identity**: `WorkOrderId`, `SpaceId`, `PropertyId`, immutable `tenantId`.
@@ -176,12 +205,19 @@ flowchart TD
   - `InvoicedStatus`: `NOT_INVOICED` | `INVOICED_TO_RENTER` | `DEDUCTED_FROM_OWNER`.
 - **Status**: `SUBMITTED` $\to$ `DISPATCHED` $\to$ `IN_PROGRESS` $\to$ `COMPLETED` $\to$ `CLOSED`.
 
-### 4.9 `RentalInvoiceAggregate`
+### 4.9 `RepaymentPlanAggregate`
+- **Identity**: `RepaymentPlanId`, `LeaseId`, `RenterId`, immutable `tenantId`.
+- **Properties**: TotalArrearsDebt, MonthlyInstallmentAmount, TotalInstallments, RemainingInstallments, StartDate, NextInstallmentDueDate, Status (`ACTIVE`, `DEFAULTED`, `SATISFIED`).
+- **Invariants**:
+  - Monthly installment is appended as an itemized line item to each recurring monthly rental invoice.
+  - A missed repayment installment automatically transitions status to `DEFAULTED` and alerts landlord to resume legal action.
+
+### 4.10 `RentalInvoiceAggregate`
 - **Identity**: `InvoiceId`, `LeaseId`, immutable `tenantId`.
 - **Properties**: InvoiceNumber, IssueDate, DueDate, PeriodStartDate, PeriodEndDate, `RecipientRenterId` (supports roommate split invoices), Status (`DRAFT`, `ISSUED`, `PARTIALLY_PAID`, `PAID`, `OVERDUE`, `VOIDED`).
 - **Line Items (`InvoiceLineItem`)**:
-  - `Type`: `BASE_RENT`, `UTILITY_ELECTRICITY`, `UTILITY_WATER`, `UTILITY_INTERNET`, `CAM_FEE`, `MAINTENANCE_CHARGEBACK`, `LATE_FEE`, `PARKING`, `DISCOUNT`, `CUSTOM`.
-  - Description, Quantity, UnitPrice, TotalAmount.
+  - `Type`: `BASE_RENT`, `UTILITY_ELECTRICITY`, `UTILITY_WATER`, `UTILITY_INTERNET`, `CAM_FEE`, `ANCILLARY_PARKING`, `ANCILLARY_PET`, `ANCILLARY_STORAGE`, `MAINTENANCE_CHARGEBACK`, `REPAYMENT_INSTALLMENT`, `LATE_FEE`, `CONCESSION_DISCOUNT`, `EARLY_BIRD_DISCOUNT`, `TAX_LEVY`, `CUSTOM`.
+  - Description, Quantity, UnitPrice, TotalAmount, `TaxRatePct` (e.g. 0% residential, 10% commercial/parking).
 - **Payments (`PaymentReceipt`)**:
   - ReceiptId, AmountPaid, PaymentDate, Method (`CASH`, `CHECK`, `BANK_TRANSFER`, `CREDIT_CARD`), ReferenceNumber, AllocatedBreakdown.
 - **Invariants**:
@@ -237,23 +273,32 @@ classDiagram
     IRoommateBillingStrategy <|.. SingleMasterInvoiceStrategy
     IRoommateBillingStrategy <|.. IndividualRoomLeaseStrategy
 
-    class IPaymentAllocationStrategy {
+    class IFinalUtilitySettlementStrategy {
         <<interface>>
-        +allocate(invoice, paymentAmount) AllocationResult
+        +calculateFinalSettlement(space, moveOutDate, deposit) UtilitySettlementResult
     }
-    class FifoWaterfallAllocationStrategy {
-        +allocate()
+    class FinalPhysicalMeterReadingStrategy {
+        +calculateFinalSettlement()
     }
-    class ProportionalAllocationStrategy {
-        +allocate()
+    class HistoricalDailyAverageStrategy {
+        +calculateFinalSettlement()
     }
-    class StrictFullAllocationStrategy {
-        +allocate()
+    class TemporaryEscrowHoldbackStrategy {
+        +calculateFinalSettlement()
     }
 
-    IPaymentAllocationStrategy <|.. FifoWaterfallAllocationStrategy
-    IPaymentAllocationStrategy <|.. ProportionalAllocationStrategy
-    IPaymentAllocationStrategy <|.. StrictFullAllocationStrategy
+    IFinalUtilitySettlementStrategy <|.. FinalPhysicalMeterReadingStrategy
+    IFinalUtilitySettlementStrategy <|.. HistoricalDailyAverageStrategy
+    IFinalUtilitySettlementStrategy <|.. TemporaryEscrowHoldbackStrategy
+
+    class ITaxCalculationStrategy {
+        <<interface>>
+        +calculateTax(lineItem, renterType) TaxResult
+    }
+    class StandardTaxCalculationStrategy {
+        +calculateTax()
+    }
+    ITaxCalculationStrategy <|.. StandardTaxCalculationStrategy
 ```
 
 ### 5.1 `IUtilityCalculationStrategy` (with CAM Deduction)
@@ -262,30 +307,24 @@ classDiagram
 - **`RubsSqftCalculationStrategy`**: Charge = $(MasterBill \times (1 - CamAllowancePct)) \times (SpaceSqFt / TotalPropertySqFt)$.
 - **`FlatFeeCalculationStrategy`**: Fixed recurring amount defined in lease agreement.
 
-### 5.2 `IRoommateBillingStrategy`
+### 5.2 `IFinalUtilitySettlementStrategy` (Move-Out Settlement)
+- **`FinalPhysicalMeterReadingStrategy`**: Reading taken on move-out day multiplied by active tariff; charged immediately.
+- **`HistoricalDailyAverageStrategy`**: Daily average of prior 90 days multiplied by days occupied in final cycle; charged immediately.
+- **`TemporaryEscrowHoldbackStrategy`**: Holds an agreed escrow amount (e.g. $150) until the municipal utility bill arrives, then true-up and refund remaining balance.
+
+### 5.3 `IRoommateBillingStrategy`
 - **`JointSeveralSplitInvoiceStrategy`**: Generates individualized invoices per roommate based on configured split percentages (e.g. 50/50), while retaining joint legal liability on the underlying lease.
 - **`SingleMasterInvoiceStrategy`**: Generates one master invoice for the entire unit; roommates make partial payments toward the shared balance.
 - **`IndividualRoomLeaseStrategy`**: Generates an independent invoice for each private bedroom lease, with common utilities split among current active occupants.
 
-### 5.3 `IPaymentAllocationStrategy`
-- **`FifoWaterfallAllocationStrategy` (Default)**: Payments clear oldest outstanding invoices first. Within an invoice, funds clear `BASE_RENT` first, followed by `UTILITIES`, then `MAINTENANCE_CHARGEBACKS`, then `LATE_FEES`.
+### 5.4 `IPaymentAllocationStrategy`
+- **`FifoWaterfallAllocationStrategy` (Default)**: Payments clear oldest outstanding invoices first. Within an invoice, funds clear `BASE_RENT` first, followed by `UTILITIES`, then `ANCILLARY_SERVICES`, then `MAINTENANCE_CHARGEBACKS`, then `LATE_FEES`.
 - **`ProportionalAllocationStrategy`**: Funds distributed pro-rata across all unpaid line items based on their percentage of the remaining balance.
 - **`StrictFullAllocationStrategy`**: Rejects partial allocation; holds funds in unapplied credit until full invoice amount is satisfied.
 
-### 5.4 `ILateFeeStrategy`
-- **`FlatLateFeeStrategy`**: Assesses a single fixed amount (e.g. $50) if balance remains unpaid after the grace period.
-- **`PercentageLateFeeStrategy`**: Assesses a percentage (e.g. 5%) of unpaid base rent.
-- **`DailyAccruingLateFeeStrategy`**: Assesses a daily rate (e.g. $10/day) beginning day after grace period up to a statutory ceiling.
-- **`NoLateFeeStrategy`**: Zero late fee assessed.
-
-### 5.5 `IProrationStrategy`
-- **`ActualDaysProrationStrategy`**: $DailyRate = MonthlyRent / DaysInActualMonth$. Partial Month = $DailyRate \times DaysOccupied$.
-- **`ThirtyDayStandardProrationStrategy` (Banker's Rule)**: $DailyRate = MonthlyRent / 30$. Partial Month = $DailyRate \times DaysOccupied$.
-
-### 5.6 `IMeterValidationPolicy`
-- **`DecreasingReadingPolicy`**: Blocks any reading where $Reading_{curr} < Reading_{prev}$ unless an explicit `MeterResetEvent` is provided.
-- **`SpikeDetectionPolicy`**: Automatically flags readings exceeding 200% of the 3-reading rolling average as `FLAGGED_SPIKE`, holding invoice dispatch until supervisor confirmation.
-- **`PermissivePolicy`**: Records readings without automated threshold blocks.
+### 5.5 `ITaxCalculationStrategy`
+- Residential leases: Base rent is tax-exempt ($0\%$). Ancillary parking/storage or short-term stays taxed according to jurisdiction.
+- Commercial leases: Rent, CAM, and parking taxed at configured VAT/Sales Tax rate (e.g. $10\%$ or $19\%$).
 
 ---
 
@@ -308,26 +347,37 @@ stateDiagram-v2
     CLOSED --> [*]
 ```
 
-### 6.2 Rental Invoice State Machine
+### 6.2 Renter Meter Photo Submission State Machine
 
 ```mermaid
 stateDiagram-v2
-    [*] --> DRAFT: Recurring generation job
-    DRAFT --> ISSUED: Dispatched to renter
-    ISSUED --> PARTIALLY_PAID: Partial payment recorded
-    PARTIALLY_PAID --> PAID: Remaining balance received
-    ISSUED --> PAID: Full payment received
-    ISSUED --> OVERDUE: Due date + Grace period exceeded
-    PARTIALLY_PAID --> OVERDUE: Grace period exceeded with balance
-    OVERDUE --> PAID: Full arrears paid
-    OVERDUE --> PARTIALLY_PAID: Partial arrears paid
-    ISSUED --> VOIDED: Billing error correction
-    OVERDUE --> VOIDED: Bad debt write-off / correction
-    PAID --> [*]
-    VOIDED --> [*]
+    [*] --> SUBMITTED: Renter uploads reading + photo proof
+    SUBMITTED --> UNDER_REVIEW: Supervisor / Landlord opens review
+    SUBMITTED --> FLAGGED_SPIKE: Anomaly detector flags >200% jump
+    FLAGGED_SPIKE --> UNDER_REVIEW: Supervisor inspects photo
+    UNDER_REVIEW --> VERIFIED: Photo verified & approved
+    UNDER_REVIEW --> DISPUTED: Photo unclear or dial mismatch
+    DISPUTED --> SUBMITTED: Renter re-submits photo proof
+    VERIFIED --> INVOICED: Reading committed to monthly invoice
+    INVOICED --> [*]
 ```
 
-### 6.3 Maintenance Work Order State Machine
+### 6.3 Delinquency Repayment Plan State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: Landlord drafts installment terms
+    DRAFT --> ACTIVE: Renter and Landlord sign agreement
+    ACTIVE --> INSTALLMENT_PAID: Monthly installment paid with rent
+    INSTALLMENT_PAID --> ACTIVE: Remaining installments > 0
+    INSTALLMENT_PAID --> SATISFIED: All installments completed (Debt 0)
+    ACTIVE --> DEFAULTED: Installment missed past grace period
+    DEFAULTED --> NOTICE_TO_QUIT: Landlord issues statutory eviction notice
+    SATISFIED --> [*]
+    NOTICE_TO_QUIT --> [*]
+```
+
+### 6.4 Maintenance Work Order State Machine
 
 ```mermaid
 stateDiagram-v2
@@ -339,22 +389,6 @@ stateDiagram-v2
     COMPLETED --> BILLED_TO_RENTER: Chargeback line item appended to next invoice
     CLOSED_OWNER_EXPENSE --> [*]
     BILLED_TO_RENTER --> [*]
-```
-
-### 6.4 Lease Renewal Offer State Machine
-
-```mermaid
-stateDiagram-v2
-    [*] --> OFFER_GENERATED: 60/90-day trigger fires
-    OFFER_GENERATED --> DELIVERED: Sent to resident with revised terms
-    DELIVERED --> ACCEPTED: Resident accepts new terms
-    DELIVERED --> DECLINED: Resident declines / gives notice to vacate
-    DELIVERED --> COUNTERED: Resident proposes counter-rate
-    COUNTERED --> DELIVERED: Landlord accepts or amends offer
-    ACCEPTED --> NEW_LEASE_EXECUTED: New lease agreement activated
-    DECLINED --> UNDER_NOTICE: Transition lease to UNDER_NOTICE
-    NEW_LEASE_EXECUTED --> [*]
-    UNDER_NOTICE --> [*]
 ```
 
 ---
@@ -378,7 +412,7 @@ sequenceDiagram
 
     Note over Landlord,Renter: 3. Move-Out Inspection & Reconciliation
     Landlord->>Escrow: Record Itemized Deductions
-    Note right of Escrow: - Unpaid Rent: $200<br/>- Repairs / Paint (WorkOrder-12): $150<br/>- Final Electric: $75<br/>Total Deductions: $425
+    Note right of Escrow: - Unpaid Rent: $200<br/>- Repairs / Paint (WorkOrder-12): $150<br/>- Final Electric (Holdback/Reading): $75<br/>Total Deductions: $425
     Escrow->>Escrow: Calculate Settlement ($1,800 + $18 - $425 = $1,393)
     Escrow->>Renter: Disburse Statement & $1,393 Refund
     Escrow-->>Lease: Mark Status: SETTLED -> Transition to CLOSED

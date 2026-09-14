@@ -4,7 +4,7 @@
 
 **Product Name**: Sthanori Multi-Tenant Real Estate & Rental Billing Platform  
 **Target Audience**: Independent Landlords, Property Management Companies, Co-living Operators, and Commercial Property Owners.  
-**Core Mission**: Provide an automated, mathematically rigorous, and auditable platform for managing properties, rentable spaces, resident leases, utility metering, recurring rental invoicing, roommate split billing, maintenance chargebacks, owner disbursements, and move-out security deposit reconciliations.
+**Core Mission**: Provide an automated, mathematically rigorous, and auditable platform for managing properties, rentable spaces, resident leases, utility metering, recurring rental invoicing, roommate split billing, maintenance chargebacks, owner disbursements, delinquency repayment plans, and move-out security deposit reconciliations.
 
 ---
 
@@ -12,11 +12,11 @@
 
 | Role | Scope | Permissions |
 | :--- | :--- | :--- |
-| **Landlord / Company Admin** | Tenant Workspace | Full administrative control: configure properties, leases, utility billing rules, pricing plans, staff access, and financial ledgers. |
-| **Property Manager** | Assigned Properties | Manage units, draft and activate leases, record meter readings, issue invoices, record payments, and manage work orders. |
+| **Landlord / Company Admin** | Tenant Workspace | Full administrative control: configure properties, leases, utility billing rules, pricing plans, staff access, tax rules, and financial ledgers. |
+| **Property Manager** | Assigned Properties | Manage units, draft and activate leases, verify meter submissions, issue invoices, record payments, manage work orders, and issue legal notices. |
 | **Property Owner (Investor)**| Owned Properties | Read-only portal access to property occupancy rates, maintenance expense reports, and monthly Owner Disbursement statements. |
 | **Field Inspector / Technician** | Assigned Properties | Record utility sub-meter readings, log inspection notes, complete maintenance work orders, and upload damage photos. |
-| **Renter (Resident / Occupant / Client)** | Self / Active Leases | Read-only access to own lease terms, download itemized invoices, view utility consumption breakdowns, submit maintenance tickets, and download payment receipts. |
+| **Renter (Resident / Occupant / Client)** | Self / Active Leases | Read-only access to own lease terms, upload meter readings with photo proof, download itemized invoices, view utility breakdowns, submit maintenance tickets, and download payment receipts. |
 
 ---
 
@@ -55,40 +55,80 @@
   - Flag any reading where $Reading_{curr} < Reading_{prev}$ unless an explicit `MeterResetEvent` is documented.
   - Automatically flag consumption exceeding 200% of rolling 3-reading average as `FLAGGED_SPIKE`, holding invoice dispatch until supervisor confirmation.
 
-### Module 5: Rental Invoicing & Roommate Split Billing
-- **FR-5.1**: The system must support automated generation of recurring monthly invoices X days prior to the billing due date.
-- **FR-5.2**: The system must support 3 distinct roommate billing strategies via `IRoommateBillingStrategy`:
+### Module 5: Renter Meter Photo Submission & Verification
+- **FR-5.1**: Renters must be able to submit their own utility sub-meter readings via mobile/web UI with mandatory photo evidence of the meter display.
+- **FR-5.2**: The system must provide a verification dashboard for landlords/property managers to review the photo and reading.
+- **FR-5.3**: State transitions: `SUBMITTED` $\to$ `UNDER_REVIEW` $\to$ `VERIFIED` / `DISPUTED` $\to$ `INVOICED`.
+- **FR-5.4**: If the landlord lives nearby or conducts physical inspections, the landlord/technician can enter verified readings directly.
+
+### Module 6: Move-Out Final Utility Settlement
+- **FR-6.1**: The system must support three move-out utility settlement strategies via `IFinalUtilitySettlementStrategy`:
+  1. **Final Physical Meter Reading**: Reading taken on move-out day multiplied by active tariff rate; billed immediately.
+  2. **Historical Daily Average**: Daily average of prior 90 days multiplied by days occupied in the partial move-out month.
+  3. **Temporary Escrow Holdback**: Retains a fixed holdback (e.g. $150) in deposit escrow until the municipal bill arrives, then settles true-up and refunds remainder.
+
+### Module 7: Ancillary Recurring Services Ledger (Add-ons)
+- **FR-7.1**: Leases must support attaching zero or more recurring ancillary add-ons:
+  - Assigned Parking (Carport, Underground, EV Charging Station with metered rate)
+  - Pet Rent (monthly per pet)
+  - Storage Lockers / Units
+  - Valet Trash & Pest Control
+- **FR-7.2**: Recurring add-ons automatically generate itemized lines on the monthly invoice.
+- **FR-7.3**: Support one-off incidental charges: Key fob replacement, lockout fees, NSF returned check fees.
+
+### Module 8: Concessions, Amortized Discounts & Early-Bird Incentives
+- **FR-8.1**: The system must support **Upfront Concessions** (e.g. "1st month free") where the discount is fully applied to the initial invoice.
+- **FR-8.2**: The system must support **Amortized Concessions** (e.g. $1,200 annual discount spread as $100/mo) displaying both Gross Contract Rent and Net Effective Rent on invoices.
+- **FR-8.3**: Concessions must support an optional **Early Termination Clawback** clause requiring repayment if the lease is breached.
+- **FR-8.4**: The system must support **Early-Bird Payment Discounts** (e.g. $25 discount if rent is paid on or before the 28th of the prior month).
+
+### Module 9: Delinquency, Legal Notices & Installment Repayment Plans
+- **FR-9.1**: The system must dispatch automated reminder schedules: 3 days before due, on due date, and day after grace period expiration.
+- **FR-9.2**: The system must generate formal statutory legal notices: "Notice to Pay or Quit" with itemized arrears and statutory cure deadlines.
+- **FR-9.3**: The system must track **Installment Repayment Plans** (`RepaymentPlanAggregate`) allowing delinquent renters to pay debt in monthly installments alongside active rent.
+- **FR-9.4**: The system must provide a **Legal Hold Toggle** (`IsLegalHoldActive`): when enabled during active eviction proceedings, the portal strictly blocks partial payments to prevent legal waiver of eviction notices.
+
+### Module 10: Tax, VAT & Municipal Levies Engine
+- **FR-10.1**: The system must support `ITaxCalculationStrategy` evaluating taxability on a line-item basis:
+  - Long-term residential rent: Tax-exempt ($0\%$).
+  - Commercial rent & CAM: Taxable at configured VAT/Sales Tax percentage.
+  - Ancillary parking/storage: Taxable or exempt based on local municipal rules.
+  - Utility user taxes: Surcharges applied to designated utility line items.
+
+### Module 11: Rental Invoicing & Roommate Split Billing
+- **FR-11.1**: The system must support automated generation of recurring monthly invoices X days prior to the billing due date.
+- **FR-11.2**: The system must support 3 distinct roommate billing strategies via `IRoommateBillingStrategy`:
   1. **Joint & Several Split Invoicing**: Generates individualized invoices per roommate based on configured split percentages, while preserving joint legal liability on the master lease.
   2. **Single Master Invoice**: Consolidates the unit onto one invoice, allowing roommates to submit partial payments.
   3. **Individual Room Leases**: Direct independent invoices per private bedroom lease.
-- **FR-5.3**: Invoices must support configurable layout:
+- **FR-11.3**: Invoices must support configurable layout:
   - **Unified Monthly Invoice**: Consolidating base rent, itemized utilities, and recurring fees.
   - **Separate Utility Invoice**: Dispatched independently when municipal utility bills arrive out-of-cycle.
-- **FR-5.4**: When an invoice remains unpaid past the due date plus grace period, late fees must be assessed via the active `ILateFeeStrategy` (Flat, Percentage, Daily Accruing, or None).
+- **FR-11.4**: When an invoice remains unpaid past the due date plus grace period, late fees must be assessed via the active `ILateFeeStrategy` (Flat, Percentage, Daily Accruing, or None).
 
-### Module 6: Payment Recording & Allocation Waterfall
-- **FR-6.1**: The system must support recording offline payments (Cash, Check, Wire Transfer, Money Order) with reference numbers and payment dates.
-- **FR-6.2**: When partial payments are recorded, funds must be allocated according to the active `IPaymentAllocationStrategy`:
-  - **FIFO Waterfall (Default)**: Clears oldest outstanding invoice first, prioritizing Rent $\to$ Utilities $\to$ Maintenance Chargebacks $\to$ Late Fees.
+### Module 12: Payment Recording & Allocation Waterfall
+- **FR-12.1**: The system must support recording offline payments (Cash, Check, Wire Transfer, Money Order) with reference numbers and payment dates.
+- **FR-12.2**: When partial payments are recorded, funds must be allocated according to the active `IPaymentAllocationStrategy`:
+  - **FIFO Waterfall (Default)**: Clears oldest outstanding invoice first, prioritizing Rent $\to$ Utilities $\to$ Ancillary Services $\to$ Maintenance Chargebacks $\to$ Late Fees.
   - **Proportional Allocation**: Allocates funds pro-rata across all unpaid line items.
   - **Strict Full Payment**: Withholds funds in an unapplied credit balance until full invoice balance is satisfied.
-- **FR-6.3**: Every recorded payment must generate an immutable `PaymentReceipt` displaying remaining balance.
+- **FR-12.3**: Every recorded payment must generate an immutable `PaymentReceipt` displaying remaining balance.
 
-### Module 7: Maintenance Work Orders & Cost Attribution
-- **FR-7.1**: The system must support the maintenance ticket lifecycle: `SUBMITTED` $\to$ `DISPATCHED` $\to$ `IN_PROGRESS` $\to$ `COMPLETED` $\to$ `CLOSED`.
-- **FR-7.2**: Maintenance costs must be attributed to either:
+### Module 13: Maintenance Work Orders & Cost Attribution
+- **FR-13.1**: The system must support the maintenance ticket lifecycle: `SUBMITTED` $\to$ `DISPATCHED` $\to$ `IN_PROGRESS` $\to$ `COMPLETED` $\to$ `CLOSED`.
+- **FR-13.2**: Maintenance costs must be attributed to either:
   - **`LANDLORD_EXPENSE`**: Operating cost deducted from property revenue / owner distribution.
   - **`TENANT_CHARGEBACK`**: Negligence/damage cost appended directly as a line item on the renter's subsequent rental invoice.
 
-### Module 8: Property Owner Management & Disbursements
-- **FR-8.1**: The system must support properties owned by third-party investors with configured Management Fee rules (e.g. 8% of collected rent or flat monthly rate).
-- **FR-8.2**: The system must generate monthly **Owner Disbursement Statements**:  
+### Module 14: Property Owner Management & Disbursements
+- **FR-14.1**: The system must support properties owned by third-party investors with configured Management Fee rules (e.g. 8% of collected rent or flat monthly rate).
+- **FR-14.2**: The system must generate monthly **Owner Disbursement Statements**:  
   $\text{Disbursement Amount} = \text{Gross Rent Collected} - \text{Management Fees} - \text{Owner Maintenance Expenses}$.
 
-### Module 9: Security Deposit Escrow & Move-Out Settlement
-- **FR-9.1**: The system must track multiple deposit categories (Security, Pet, Key/Access, Advance Last Month Rent) held in designated escrow bank accounts.
-- **FR-9.2**: The system must support optional statutory annual interest accrual credited to the renter or settled at move-out.
-- **FR-9.3**: Upon lease termination, the system must provide an itemized Move-Out Settlement workflow deducting unpaid rent, utilities, cleaning, and repair damages, generating a formal statement with net refund / balance due.
+### Module 15: Security Deposit Escrow & Move-Out Settlement
+- **FR-15.1**: The system must track multiple deposit categories (Security, Pet, Key/Access, Advance Last Month Rent) held in designated escrow bank accounts.
+- **FR-15.2**: The system must support optional statutory annual interest accrual credited to the renter or settled at move-out.
+- **FR-15.3**: Upon lease termination, the system must provide an itemized Move-Out Settlement workflow deducting unpaid rent, utilities (via move-out strategy), cleaning, and repair damages, generating a formal statement with net refund / balance due.
 
 ---
 
@@ -109,4 +149,4 @@
 3. **Consumption Spikes & Leaks**: When consumption exceeds 200% of rolling 3-reading average, system holds invoice generation until supervisor verification.
 4. **Overpayments & Account Credit**: If a renter pays more than the total balance due, the surplus must be held in a tenant credit ledger and automatically applied to the subsequent billing cycle.
 5. **Roommate Mid-Month Departure in Co-Living**: When one roommate leaves a shared unit mid-month, utility splits must recalculate dynamically based on active occupant day-counts.
-6. **Lease Rollover**: Leases reaching expiration date without notice automatically transition to `MONTH_TO_MONTH` status, continuing automated invoice generation unless explicitly terminated.
+6. **Eviction Payment Interception**: When `IsLegalHoldActive` is flagged on a delinquent lease, partial online or automated payments are blocked to prevent legal waiver of active eviction proceedings.
