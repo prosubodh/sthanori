@@ -746,7 +746,7 @@
 - **Date**: 2026-09-14
 - **Status**: Accepted
 - **Context**:
-  While domain and controller layers were tested in isolation, the outermost observable user interface in `apps/web` relied on static dummy state and lacked real API integration. Furthermore, Tailwind CSS v4 styling was not loaded, and full Docker containerization (`web` and `api` behind Traefik reverse proxy on port 80) was missing, violating Section 6, 7, and London School Outside-In TDD mandates of `AGENTS.md`.
+  While domain and controller layers were tested in isolation, the outermost observable user interface in `apps/web` relied on static dummy state and lacked real API integration. Furthermore, Tailwind CSS v4 styling was not loaded, and full Docker containerization (`web` and `api` behind reverse proxy on port 80) was missing, violating Section 6, 7, and London School Outside-In TDD mandates of `AGENTS.md`.
 - **Decision**:
   1. **Owned Client API Port (`IPropertyCatalogApiClient`)**:
      - Define client interface `IPropertyCatalogApiClient` in `apps/web/src/features/properties/api/property-catalog.client.ts`.
@@ -755,15 +755,55 @@
   2. **TanStack React Query Custom Hooks**:
      - Provide `usePropertyCatalog`, `useCreateProperty`, `useCreateSpace`, `useUpdateSpaceStatus` to manage remote server state, loading skeletons, optimistic updates/cache invalidations, and error feedback.
   3. **Outside-In UI Acceptance Tests**:
-     - Drive UI route `HomeComponent` with React Testing Library: assert loading skeleton $\to$ data render from API $\to$ add property mutation $\to$ add space mutation $\to$ update space status.
+     - Drive UI route `HomeComponent` with React Testing Library: assert loading skeleton -> data render from API -> add property mutation -> add space mutation -> update space status.
   4. **Design Tokens & Tailwind v4 Theming (60-30-10 Rule)**:
-     - Connect `@sthanori/ui/styles.css` with Tailwind v4 `@theme` mappings (`--color-canvas`, `--color-surface`, `--color-main`, `--color-muted`, `--color-border`, `--color-accent`) and FOUC prevention.
+     - Connect `@sthanori/ui/styles.css` with Tailwind v4 `@theme` mappings and FOUC prevention.
   5. **Day-1 Docker Parity**:
      - Multi-stage Dockerfiles for `apps/api` and `apps/web` (with nginx reverse-proxy / static server).
-     - Wire Traefik v3.3 reverse proxy on port 80 with routes: `/api` $\to$ `api:4000`, `/docs` $\to$ `api:4000`, `/` $\to$ `web:80`.
+     - Wire unified reverse proxy on port 80 routing `/api` -> `api:4000`, `/docs` -> `api:4000`, `/` -> `web:80`.
 - **Consequences**:
   - **Positive**: Full stack runs via `docker compose up -d --build` accessible at `http://localhost/`; UI reflects real backend database state; 100% adherence to `AGENTS.md` Outside-In TDD and DevSecOps invariants.
   - **Trade-offs**: Requires building container images and keeping client contracts strictly aligned with backend DTOs.
+
+---
+
+## ADR-023: Milestone 0: Foundational Enterprise App Shell, Radix/shadcn UI Primitives, Theme Engine, and Layout Architecture
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  The initial UI implementation of Issue #1 lacked an enterprise design system, functional theme engine, Radix/shadcn primitives, and layout shell, leading to an unstyled, brittle interface. The user formally demanded stepping back to establish **Milestone 0: Foundational Enterprise App Shell & Design System** following the Relentless Questioning Protocol, Design Pro Max standards (Section 6), and London School Outside-In TDD.
+- **Decision**:
+  1. **Milestone 0 Priority**:
+     - Halt business feature development until the foundational enterprise app shell, theme engine, and design primitives are fully implemented, containerized, and tested.
+  2. **Visual Archetype & Palette**:
+     - Adopt **Clean Enterprise SaaS (Slate & Emerald)** adhering to the 60-30-10 color rule:
+       - 60% Canvas & Surface: Slate neutrals (`--bg-canvas`, `--bg-surface`, `--bg-surface-elevated`) in dark/light modes.
+       - 30% Structure & Typography: Slate borders (`--border-base`, `--border-subtle`) and high-contrast text (`--text-main`, `--text-muted`).
+       - 10% Purposeful Accent: Emerald (`--accent-primary` #10b981) for primary actions, active indicators, and financial trust.
+  3. **Shared Design System Package (`@sthanori/ui`)**:
+     - House all UI primitives and design tokens in `packages/ui` (`@sthanori/ui`) for shared consumption across `apps/web` and future tenant/admin portals.
+     - Primitives to implement: `Button`, `Input`, `Card`, `Badge`, `Dialog`, `DropdownMenu`, `Table`, `Skeleton`, `ThemeToggle`, `AppShell`.
+     - Ergonomics & A11y: WCAG AA contrast (4.5:1), 44x44px touch targets, `:focus-visible` rings, ARIA roles, and zero browser dialogs.
+  4. **Layout Architecture**:
+     - Collapsible Enterprise Sidebar with Sticky Header:
+       - Left Collapsible Sidebar: Brand logo ("Sthanori"), workspace switcher, navigation sections (Properties & Spaces, Units, Leases, Maintenance, Settings), user profile card with status.
+       - Top Sticky Header: Dynamic Breadcrumbs, global search / command bar trigger, theme toggle (Light / Dark / System), notification trigger.
+       - Main Canvas: Responsive padding, container queries, skeleton loading states to prevent CLS.
+  5. **Theme Engine**:
+     - Multi-mode support: `Light`, `Dark`, `System` (auto-sync with OS).
+     - Driven by `data-theme` attribute and `.dark` class on root HTML element.
+     - Persisted in `localStorage` with fallback to `prefers-color-scheme`.
+     - Blocking inline `<head>` script in `apps/web/index.html` to eliminate FOUC.
+  6. **Multi-Tenant Workspace Context**:
+     - Seed default active workspace ("Apex Real Estate Holdings") and Property Manager profile in the App Shell.
+     - Reactive workspace switcher propagating `x-tenant-id` to client API calls.
+- **Rationale & Alternatives**:
+  - *Colocation in `apps/web`*: Rejected in favor of `packages/ui` to uphold Hexagonal Architecture and ensure future tenant/vendor portals share the identical design system without duplication.
+- **Consequences**:
+  - **Positive**: Professional enterprise aesthetic; WCAG AA compliance; modular app shell; seamless dark/light theming without FOUC; verified via Outside-In TDD.
+  - **Trade-offs**: Requires wiring `@sthanori/ui` with React 19, Tailwind v4, and Radix primitives.
+
 
 
 

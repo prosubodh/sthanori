@@ -1,23 +1,71 @@
 :root {
-  /* 60-30-10 Design Intelligence Tokens (Light Theme Baseline) */
+  /* 60-30-10 Design Intelligence Tokens (Light Theme - Clean Enterprise Slate & Emerald) */
   --bg-canvas: #f8fafc;
   --bg-surface: #ffffff;
+  --bg-surface-elevated: #ffffff;
   --text-main: #0f172a;
   --text-muted: #64748b;
   --border-base: #e2e8f0;
+  --border-subtle: #f1f5f9;
   --accent-primary: #10b981;
   --accent-hover: #059669;
+
+  /* shadcn/ui semantic design system tokens (Light) */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #10b981;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #10b981;
+  --radius: 0.5rem;
 }
 
+.dark,
 [data-theme="dark"] {
-  /* 60-30-10 Design Intelligence Tokens (Dark Theme - Enterprise Slate) */
-  --bg-canvas: #09090b;
-  --bg-surface: #18181b;
-  --text-main: #fafafa;
-  --text-muted: #a1a1aa;
-  --border-base: #27272a;
+  /* 60-30-10 Design Intelligence Tokens (Dark Theme - Enterprise Slate & Emerald) */
+  --bg-canvas: #090d16;
+  --bg-surface: #0f172a;
+  --bg-surface-elevated: #1e293b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-base: #1e293b;
+  --border-subtle: #334155;
   --accent-primary: #10b981;
   --accent-hover: #34d399;
+
+  /* shadcn/ui semantic design system tokens (Dark) */
+  --background: #090d16;
+  --foreground: #f8fafc;
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+  --popover: #0f172a;
+  --popover-foreground: #f8fafc;
+  --primary: #10b981;
+  --primary-foreground: #090d16;
+  --secondary: #1e293b;
+  --secondary-foreground: #f8fafc;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #f8fafc;
+  --destructive: #b91c1c;
+  --destructive-foreground: #f8fafc;
+  --border: #1e293b;
+  --input: #1e293b;
+  --ring: #34d399;
 }
 
 body {
@@ -27,4 +75,18 @@ body {
     Cantarell, sans-serif;
   margin: 0;
   padding: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  border-color: var(--border-base);
+  box-sizing: border-box;
+}
+
+/* Accessibility Focus Ring Baseline */
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }

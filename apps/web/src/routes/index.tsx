@@ -42,67 +42,66 @@ export function HomeComponent({ client, tenantId = 'demo-landlord-ws' }: HomeCom
   };
 
   return (
-    <div className="min-h-screen bg-canvas text-main">
-      <header className="max-w-6xl mx-auto pt-8 pb-4 px-6 text-center">
-        <div className="inline-block px-3 py-1 text-xs font-semibold uppercase tracking-wider rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800 mb-3">
+    <div className="w-full space-y-6">
+      {/* Header section maintaining regression tests compatibility */}
+      <div className="border-b border-slate-200 dark:border-slate-800 pb-5">
+        <div className="inline-block px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 mb-2">
           Workspace: {tenantId}
         </div>
-        <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl text-slate-900 dark:text-slate-50">
           Sthanori Multi-Tenant Platform
         </h1>
-        <p className="mt-2 text-sm text-zinc-400">
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
           Enterprise SaaS platform powered by Hexagonal Architecture, London School TDD, and
           12-Factor cloud-native discipline.
         </p>
-      </header>
+      </div>
 
-      <main className="max-w-6xl mx-auto px-6 pb-12">
-        {isLoading && (
-          <output
-            data-testid="property-catalog-skeleton"
-            aria-live="polite"
-            className="block w-full space-y-6 animate-pulse"
-          >
-            <div className="h-8 bg-zinc-800/60 rounded-md w-1/3" />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="h-64 bg-zinc-900/50 border border-zinc-800 rounded-xl" />
-              <div className="h-64 bg-zinc-900/50 border border-zinc-800 rounded-xl" />
-            </div>
-            <div className="h-96 bg-zinc-900/50 border border-zinc-800 rounded-xl" />
-            <span className="sr-only">Loading properties...</span>
-          </output>
-        )}
-
-        {error && (
-          <div
-            role="alert"
-            className="p-6 rounded-xl bg-red-950/50 border border-red-800 text-red-200 space-y-4 my-6"
-          >
-            <div className="flex items-center space-x-3">
-              <span className="text-xl font-bold">⚠️ Connection Error</span>
-            </div>
-            <p className="text-sm text-red-300">
-              {error instanceof Error ? error.message : 'Failed to fetch property catalog'}
-            </p>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
-            >
-              Retry
-            </button>
+      {isLoading && (
+        <output
+          data-testid="property-catalog-skeleton"
+          aria-live="polite"
+          className="block w-full space-y-6 animate-pulse"
+        >
+          <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-md w-1/3" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-64 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl" />
+            <div className="h-64 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl" />
           </div>
-        )}
+          <div className="h-96 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl" />
+          <span className="sr-only">Loading properties...</span>
+        </output>
+      )}
 
-        {!isLoading && !error && (
-          <PropertyCatalogView
-            properties={properties}
-            onCreateProperty={handleCreateProperty}
-            onCreateSpace={handleCreateSpace}
-            onUpdateSpaceStatus={handleUpdateSpaceStatus}
-          />
-        )}
-      </main>
+      {error && (
+        <div
+          role="alert"
+          className="p-6 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-900 dark:text-red-200 space-y-4 my-6"
+        >
+          <div className="flex items-center space-x-3">
+            <span className="text-xl font-bold">⚠️ Connection Error</span>
+          </div>
+          <p className="text-sm text-red-700 dark:text-red-300">
+            {error instanceof Error ? error.message : 'Failed to fetch property catalog'}
+          </p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <PropertyCatalogView
+          properties={properties}
+          onCreateProperty={handleCreateProperty}
+          onCreateSpace={handleCreateSpace}
+          onUpdateSpaceStatus={handleUpdateSpaceStatus}
+        />
+      )}
     </div>
   );
 }
