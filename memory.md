@@ -184,3 +184,30 @@
 - **Consequences**:
   - **Positive**: Automated defense-in-depth at the database kernel level; zero schema migration sprawl; highly cost-effective; seamless migration path to enterprise siloed schemas when required.
   - **Trade-offs**: Requires setting session variables on transactions and configuring database roles properly (bypassing RLS requires explicit superuser/BYPASSRLS privileges).
+
+---
+
+## ADR-007: Feature-Flagged Domain Strategy Factory Pattern for Conflicting Tenant Workflows
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  When different enterprise tenants require divergent, conflicting business logic (e.g. approval hierarchies, custom calculations, export formats), resolving strategies dynamically requires choosing an architectural mechanism:
+  1. *Database-Backed Tenant Policy Config*: Storing policy names in tenant database records loaded via repository. Works, but adds database lookup latency to use cases and lacks percentage rollouts or dynamic targeting capabilities.
+  2. *Declarative Rule Engine*: Writing an internal JSON-schema/DSL rule interpreter. Over-engineered and complex to test with Outside-In TDD.
+  3. *Feature-Flagged Strategy Factory Pattern*: Application layer queries an owned `IFeatureFlagPort` string toggle and resolves the typed Domain Strategy via a factory.
+
+- **Decision**:
+  Adopt the **Feature-Flagged Domain Strategy Factory Pattern**:
+  1. Domain Core defines the strategy interface (e.g., `IFulfillmentStrategy`) and pure domain implementations (`FifoApprovalStrategy`, `OptimisticAutoStrategy`). Domain Core contains zero tenant IDs or flag knowledge.
+  2. The Application layer defines a typed `DomainPolicyFactory` that queries `IFeatureFlagPort.getStringValue('fulfillment_strategy', context, 'default')` to instantiate the corresponding strategy.
+  3. Use cases receive the resolved strategy via Pure Constructor DI or method injection.
+  4. In London School Outside-In TDD, each strategy is tested as an isolated domain unit with 100% coverage, and the factory is unit-tested by mocking `IFeatureFlagPort`.
+
+- **Rationale & Alternatives**:
+  - *Alternative Considered (Tenant-ID branching in Domain Core)*: Strictly forbidden because it couples Domain Core directly to external customer identities, violates Open-Closed Principle, and makes testing fragile.
+  - *Alternative Considered (Database Configuration)*: Rejected as the primary mechanism because feature flags support in-memory caching, offline fallbacks, and Canary/A-B targeting without database query overhead.
+
+- **Consequences**:
+  - **Positive**: Domain Core stays 100% pure; new tenant variations can be introduced by adding a new Strategy class without modifying existing strategies; testing is clean, fast, and deterministic; enables instant rollback or targeted canary rollout per tenant.
+  - **Trade-offs**: Requires defining a strategy interface, factory, and flag mapping for each divergent workflow.
