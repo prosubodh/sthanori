@@ -1,0 +1,43 @@
+services:
+  reverse-proxy:
+    image: traefik:v3.3
+    container_name: sthanori-traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080" # Traefik Web UI Dashboard
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - sthanori-network
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: sthanori-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sthanori
+      POSTGRES_PASSWORD: sthanori_dev_password
+      POSTGRES_DB: sthanori_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sthanori -d sthanori_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sthanori-network
+
+networks:
+  sthanori-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
