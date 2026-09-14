@@ -1,4 +1,4 @@
-# Domain Analysis & Ubiquitous Language (`DOMAIN_ANALYSIS.md`)
+# Comprehensive Domain Analysis & Ubiquitous Language (`DOMAIN_ANALYSIS.md`)
 
 ## 1. Executive Summary & Operational Scope
 
@@ -6,7 +6,7 @@
 
 1. **Multi-Property & Multi-Unit Residential**: Traditional apartment buildings, duplexes, and single-family rental complexes where individual units/apartments are leased to residents with sub-meters, flat fees, or proportional utility allocations.
 2. **Shared Housing / Co-living**: Houses or large apartments where individual private bedrooms are leased to occupants/roommates who share common utilities (electricity, high-speed WiFi, water, cleaning) split equally or by custom allocation ratios.
-3. **Commercial Real Estate**: Office buildings, medical suites, and retail storefronts leased to commercial business entities with Ratio Utility Billing System (RUBS) calculations based on square footage and commercial lease covenants.
+3. **Commercial Real Estate**: Office buildings, medical suites, and retail storefronts leased to commercial business entities with Ratio Utility Billing System (RUBS) calculations based on square footage, Common Area Maintenance (CAM) reconciliations, and commercial lease covenants.
 
 ---
 
@@ -24,6 +24,9 @@ To eliminate ambiguity across business stakeholders and engineering teams, the f
 | Domain Term | Definition | Context / Role |
 | :--- | :--- | :--- |
 | **Landlord** / **PropertyManager** | The legal property owner or managing agency operating the SaaS workspace (`tenantId`). | Operator / Creditor |
+| **Property Owner** | External investor or property deed holder who contracts a Property Manager to oversee assets. | Asset Owner / Payee |
+| **Owner Disbursement** | Periodic payout transfer from Property Manager to Property Owner (Gross Rent - Management Fees - Repairs). | Financial Outflow |
+| **Management Fee** | Percentage (e.g. 8%) or flat commission deducted by Property Manager for management services. | Operating Revenue |
 | **Renter** (Base Entity) | The generic counter-party entering into a lease agreement. | Debtor / Customer |
 | **Resident** | A physical human being leasing a residential apartment or house. | Residential Mode |
 | **Occupant** / **Roommate** | An individual leasing an individual room within a shared residential co-living space. | Co-living Mode |
@@ -31,12 +34,21 @@ To eliminate ambiguity across business stakeholders and engineering teams, the f
 | **Property** | A physical real estate asset, parcel, or building located at a validated geographic address. | Real Estate Asset |
 | **Rentable Space** | A rentable demarcation within a property (an entire apartment, a specific room, or a commercial suite). | Unit of Inventory |
 | **Lease Agreement** | The binding contractual agreement between Landlord and Renter(s) defining terms, rent, and rules. | Contractual Aggregate |
+| **Rent Escalation** | Scheduled contractual rent adjustments over multi-year leases (stepped or CPI-indexed). | Price Schedule |
+| **Renewal Proposal** | Formal offer extended to renter prior to lease expiry proposing new terms or rate revisions. | Lifecycle Offer |
 | **Security Deposit** | Funds collected at lease inception held in escrow to guarantee against property damage or default. | Escrow Liability |
+| **Escrow Account** | Dedicated bank account segregating tenant deposit liabilities from operational cash. | Fiduciary Ledger |
+| **Statutory Interest** | Jurisdictional interest accrued on held deposits payable or creditable to the renter. | Accrued Liability |
 | **Utility** | An ongoing service (electricity, water, gas, internet, trash) consumed in a space. | Service Resource |
 | **Sub-Meter** | A physical or virtual measurement device dedicated to a single rentable space tracking usage units. | Metering Device |
 | **Master Bill** | A consolidated utility invoice issued by a city or utility provider for an entire property. | Aggregated Cost |
-| **RUBS (Ratio Utility Billing)** | Mathematical formula distributing a master bill across units based on square footage or occupant count. | Allocation Algorithm |
+| **CAM (Common Area Maint.)**| House utility & maintenance expenses for shared spaces (hallway lighting, lobby HVAC, elevators). | Operational Cost |
+| **RUBS (Ratio Utility Billing)**| Mathematical formula distributing a master bill across units based on square footage or occupant count. | Allocation Algorithm |
+| **Spike Anomaly Alert** | Flag triggered when a meter reading deviates significantly from historical rolling averages. | Verification Gate |
+| **Maintenance Work Order** | Operational ticket tracking repair requests, technician dispatch, parts costs, and labor. | Maintenance Context |
+| **Tenant Chargeback** | Maintenance expense billed directly to renter's invoice due to tenant negligence or damages. | Invoiced Cost |
 | **Rental Invoice** | Periodic billing statement detailing base rent, itemized utilities, recurring fees, and adjustments. | Financial Statement |
+| **Split Invoicing** | Splitting a single joint-and-several lease invoice into individualized roommate bills. | Multi-Renter Strategy |
 | **Payment Waterfall** | Priority hierarchy governing how partial payments are allocated across invoice line items. | Accounting Protocol |
 | **Grace Period** | Allowable window of days between invoice due date and late fee assessment. | Temporal Rule |
 | **Proration** | Calculation of fractional rent when tenancy begins or terminates mid-billing cycle. | Financial Adjustment |
@@ -50,30 +62,42 @@ flowchart TD
     subgraph PropertyCatalogContext["1. Property & Space Catalog Context"]
         Property["Property Aggregate"]
         RentableSpace["Rentable Space Aggregate"]
+        PropertyOwner["Property Owner Aggregate"]
     end
 
     subgraph LeaseManagementContext["2. Lease & Tenancy Context"]
         LeaseAgreement["Lease Agreement Aggregate"]
         RenterProfile["Renter Profile Aggregate"]
-        SecurityDeposit["Security Deposit Ledger"]
+        SecurityDeposit["Security Deposit Escrow Ledger"]
+        RenewalWorkflow["Lease Renewal Workflow"]
     end
 
     subgraph UtilityMeteringContext["3. Utility & Metering Context"]
         UtilityMeter["Utility Meter Aggregate"]
         MasterUtilityBill["Master Utility Bill"]
-        UtilityStrategy["Utility Calculation Engine"]
+        UtilityEngine["Utility Calculation Engine (CAM & RUBS)"]
+        AnomalyDetector["Spike & Roll-over Anomaly Guard"]
     end
 
-    subgraph InvoicingContext["4. Billing & Invoicing Context"]
+    subgraph MaintenanceContext["4. Maintenance & Operations Context"]
+        WorkOrder["Maintenance Work Order Aggregate"]
+        VendorInvoice["Technician/Vendor Invoice"]
+        CostAttribution["Cost Attribution (Owner vs Chargeback)"]
+    end
+
+    subgraph InvoicingContext["5. Billing & Invoicing Context"]
         RentalInvoice["Rental Invoice Aggregate"]
-        PaymentAllocation["Payment Allocation Engine"]
-        PaymentReceipt["Payment Receipt"]
+        RoommateSplit["Roommate Split Billing Engine"]
+        PaymentAllocation["Payment Allocation Waterfall"]
+        OwnerDisbursement["Owner Disbursement Ledger"]
     end
 
     PropertyCatalogContext --> LeaseManagementContext
     PropertyCatalogContext --> UtilityMeteringContext
+    PropertyCatalogContext --> MaintenanceContext
     LeaseManagementContext --> InvoicingContext
     UtilityMeteringContext --> InvoicingContext
+    MaintenanceContext --> InvoicingContext
 ```
 
 ---
@@ -82,51 +106,81 @@ flowchart TD
 
 ### 4.1 `PropertyAggregate`
 - **Identity**: `PropertyId`, immutable `tenantId`.
-- **Properties**: Name, Address (Street, City, State, PostalCode, Country), `PropertyType` (`RESIDENTIAL_MULTIFAMILY`, `SINGLE_FAMILY`, `CO_LIVING`, `COMMERCIAL`, `MIXED_USE`).
+- **Properties**: Name, Address (Street, City, State, PostalCode, Country), `PropertyType` (`RESIDENTIAL_MULTIFAMILY`, `SINGLE_FAMILY`, `CO_LIVING`, `COMMERCIAL`, `MIXED_USE`), `OwnerId` (nullable if self-managed), `ManagementFeeConfig` (percentage or flat).
 - **Invariants**:
   - Address must be valid and non-empty.
   - A Property encapsulates zero or more `RentableSpace` entities.
   - Deleting a Property is prohibited if active leases exist.
 
-### 4.2 `RentableSpaceAggregate` (Unit / Room / Suite)
-- **Identity**: `SpaceId`, `PropertyId`, immutable `tenantId`.
-- **Properties**: SpaceNumber/Label (e.g. "Apt 4B", "Bedroom 2", "Suite 300"), `SpaceType` (`WHOLE_APARTMENT`, `PRIVATE_ROOM`, `COMMERCIAL_SUITE`), FloorAreaSqFt, MaxOccupants, BaseRentAmount, Status (`VACANT`, `OCCUPIED`, `MAINTENANCE`, `RESERVED`).
+### 4.2 `PropertyOwnerAggregate`
+- **Identity**: `OwnerId`, immutable `tenantId`.
+- **Properties**: LegalName, ContactEmail, ContactPhone, TaxId, BankDisbursementDetails, DefaultManagementFeePct (e.g. 8.00%).
 - **Invariants**:
-  - Status cannot be set to `VACANT` if an active `LeaseAgreement` is tied to this space.
+  - Bank routing and account details must be encrypted at rest.
+  - Owner statements must balance: $\text{Disbursement} = \text{Gross Rent} - \text{Management Fees} - \text{Owner Maintenance Expenses}$.
+
+### 4.3 `RentableSpaceAggregate` (Unit / Room / Suite)
+- **Identity**: `SpaceId`, `PropertyId`, immutable `tenantId`.
+- **Properties**: SpaceNumber/Label (e.g. "Apt 4B", "Bedroom 2", "Suite 300"), `SpaceType` (`WHOLE_APARTMENT`, `PRIVATE_ROOM`, `COMMERCIAL_SUITE`), FloorAreaSqFt, MaxOccupants, BaseRentAmount, Status (`VACANT`, `OCCUPIED`, `MAINTENANCE`, `RESERVED`), `ParentUnitId` (for co-living rooms grouped in an apartment).
+- **Invariants**:
+  - Status cannot be set to `VACANT` if an active `LeaseAgreement` covers the current date.
   - Square footage must be greater than zero.
 
-### 4.3 `RenterProfileAggregate`
+### 4.4 `RenterProfileAggregate`
 - **Identity**: `RenterId`, immutable `tenantId`.
-- **Properties**: PrimaryName, ContactEmail, ContactPhone, `RenterType` (`RESIDENTIAL_RESIDENT`, `CO_LIVING_OCCUPANT`, `COMMERCIAL_CLIENT`), TaxOrBusinessId (optional for commercial), EmergencyContacts.
+- **Properties**: PrimaryName, ContactEmail, ContactPhone, `RenterType` (`RESIDENTIAL_RESIDENT`, `CO_LIVING_OCCUPANT`, `COMMERCIAL_CLIENT`), TaxOrBusinessId (for commercial), EmergencyContacts, CreditBalance.
 - **Invariants**:
   - Email format must be validated via standard email regex schema.
-  - Multiple active leases can be linked to a single renter profile across different timeframes.
+  - Credit balance represents overpayments and must be automatically applied to future invoices.
 
-### 4.4 `LeaseAgreementAggregate`
+### 4.5 `LeaseAgreementAggregate`
 - **Identity**: `LeaseId`, `SpaceId`, immutable `tenantId`.
 - **Properties**:
-  - Primary Renter ID and co-signers/roommates list (`RenterId[]`).
+  - Primary Renter and co-signers/roommates list (`RenterId[]` with individual split percentages if configured).
   - Dates: `StartDate`, `EndDate` (nullable if month-to-month), `MoveInDate`, `MoveOutDate`.
   - Financial Terms: BaseRentAmount, Currency, BillingCycleDay (e.g., 1st), PaymentGracePeriodDays.
+  - `RentEscalationSchedule`: Scheduled future rent adjustments: `[{ effectiveDate: string, newAmount: number, reason: string }]`.
   - Security Deposit: AmountRequired, AmountPaid, Status (`PENDING`, `HELD_IN_ESCROW`, `SETTLED`).
   - Lifecycle Status: `DRAFT`, `PENDING_APPROVAL`, `ACTIVE`, `UNDER_NOTICE`, `EXPIRED`, `MONTH_TO_MONTH`, `TERMINATED`, `CLOSED`.
 - **Invariants**:
   - `EndDate` must be strictly after `StartDate`.
-  - Base rent must be represented as a positive integer in minor units (e.g. cents).
-  - Transition to `ACTIVE` requires verified space vacancy.
+  - Base rent must be represented as a positive integer in minor currency units (e.g. cents).
+  - Roommate split percentages (if configured) must sum exactly to 100.00%.
 
-### 4.5 `UtilityMeterAggregate` & Master Bills
+### 4.6 `SecurityDepositEscrowLedger`
+- **Identity**: `EscrowLedgerId`, `LeaseId`, immutable `tenantId`.
+- **Deposit Breakdown**: Itemized lines by category:
+  - `SECURITY_DEPOSIT` (general damage/rent default)
+  - `PET_DEPOSIT` (pet damage guarantee)
+  - `KEY_ACCESS_DEPOSIT` (fob/key guarantee)
+  - `ADVANCE_LAST_MONTH_RENT` (prepaid final month rent)
+- **Properties**: EscrowBankAccountId, TotalCollected, AccruedInterestAmount, StatutoryInterestRatePct, Status (`HELD_IN_ESCROW`, `RECONCILING`, `SETTLED`).
+- **Move-Out Settlement (`MoveOutSettlementStatement`)**:
+  - Itemized deductions: Unpaid Rent, Outstanding Utilities, Repair Damages (with photos/work order IDs), Cleaning Fees.
+  - Settlement Formula: $\text{NetRefund} = \text{TotalCollected} + \text{AccruedInterest} - \text{TotalDeductions}$.
+
+### 4.7 `UtilityMeterAggregate` & Master Bills
 - **Identity**: `MeterId`, `SpaceId` (or `PropertyId` for master meter), immutable `tenantId`.
-- **Properties**: `UtilityType` (`ELECTRICITY`, `WATER`, `GAS`, `INTERNET`, `TRASH`), SerialNumber, `BillingModel` (`SUB_METER`, `EQUAL_SPLIT`, `RUBS_SQFT`, `RUBS_OCCUPANTS`, `FLAT_FEE`), UnitRate.
-- **Reading History**: `MeterReading` (ReadingDate, MeterValue, ProofPhotoUrl, InspectorId).
+- **Properties**: `UtilityType` (`ELECTRICITY`, `WATER`, `GAS`, `INTERNET`, `TRASH`), SerialNumber, `BillingModel` (`SUB_METER`, `EQUAL_SPLIT`, `RUBS_SQFT`, `RUBS_OCCUPANTS`, `FLAT_FEE`), UnitRate, `CamAllowancePct` (e.g. 10% deducted for common areas).
+- **Reading History**: `MeterReading` (ReadingDate, MeterValue, ProofPhotoUrl, InspectorId, `AnomalyStatus`: `NORMAL` | `FLAGGED_SPIKE` | `VERIFIED`).
 - **Invariants**:
-  - Successive meter readings must be monotonically non-decreasing ($Reading_{current} \ge Reading_{previous}$) unless a verified meter reset is flagged.
+  - If current reading < previous reading, requires explicit `MeterResetFlag` or is rejected.
+  - If current consumption exceeds 200% of rolling 3-reading average, flagged as `FLAGGED_SPIKE` requiring supervisor approval before invoice generation.
 
-### 4.6 `RentalInvoiceAggregate`
+### 4.8 `MaintenanceWorkOrderAggregate`
+- **Identity**: `WorkOrderId`, `SpaceId`, `PropertyId`, immutable `tenantId`.
+- **Properties**: Title, Description, Category (`PLUMBING`, `HVAC`, `ELECTRICAL`, `APPLIANCE`, `STRUCTURAL`, `LOCK_SECURITY`), Priority (`LOW`, `MEDIUM`, `HIGH`, `EMERGENCY`), ReportedByRenterId, AssignedVendorId.
+- **Financial Attribution**:
+  - `CostAttribution`: `LANDLORD_EXPENSE` (owner operating cost) vs. `TENANT_CHARGEBACK` (tenant liability).
+  - EstimatedCost, FinalLaborCost, FinalPartsCost, TotalCost, SupportingInvoices/Photos.
+  - `InvoicedStatus`: `NOT_INVOICED` | `INVOICED_TO_RENTER` | `DEDUCTED_FROM_OWNER`.
+- **Status**: `SUBMITTED` $\to$ `DISPATCHED` $\to$ `IN_PROGRESS` $\to$ `COMPLETED` $\to$ `CLOSED`.
+
+### 4.9 `RentalInvoiceAggregate`
 - **Identity**: `InvoiceId`, `LeaseId`, immutable `tenantId`.
-- **Properties**: InvoiceNumber, IssueDate, DueDate, PeriodStartDate, PeriodEndDate, Status (`DRAFT`, `ISSUED`, `PARTIALLY_PAID`, `PAID`, `OVERDUE`, `VOIDED`).
+- **Properties**: InvoiceNumber, IssueDate, DueDate, PeriodStartDate, PeriodEndDate, `RecipientRenterId` (supports roommate split invoices), Status (`DRAFT`, `ISSUED`, `PARTIALLY_PAID`, `PAID`, `OVERDUE`, `VOIDED`).
 - **Line Items (`InvoiceLineItem`)**:
-  - `Type`: `BASE_RENT`, `UTILITY_ELECTRICITY`, `UTILITY_WATER`, `UTILITY_INTERNET`, `LATE_FEE`, `PARKING`, `DISCOUNT`, `CUSTOM`.
+  - `Type`: `BASE_RENT`, `UTILITY_ELECTRICITY`, `UTILITY_WATER`, `UTILITY_INTERNET`, `CAM_FEE`, `MAINTENANCE_CHARGEBACK`, `LATE_FEE`, `PARKING`, `DISCOUNT`, `CUSTOM`.
   - Description, Quantity, UnitPrice, TotalAmount.
 - **Payments (`PaymentReceipt`)**:
   - ReceiptId, AmountPaid, PaymentDate, Method (`CASH`, `CHECK`, `BANK_TRANSFER`, `CREDIT_CARD`), ReferenceNumber, AllocatedBreakdown.
@@ -145,7 +199,7 @@ In strict alignment with ADR-007, algorithmic variations are isolated behind own
 classDiagram
     class IUtilityCalculationStrategy {
         <<interface>>
-        +calculate(space, readings, masterBill) UtilityCharge
+        +calculate(space, readings, masterBill, camConfig) UtilityCharge
     }
     class SubMeterCalculationStrategy {
         +calculate()
@@ -164,6 +218,24 @@ classDiagram
     IUtilityCalculationStrategy <|.. EqualSplitCalculationStrategy
     IUtilityCalculationStrategy <|.. RubsSqftCalculationStrategy
     IUtilityCalculationStrategy <|.. FlatFeeCalculationStrategy
+
+    class IRoommateBillingStrategy {
+        <<interface>>
+        +generateInvoices(lease, period) RentalInvoice[]
+    }
+    class JointSeveralSplitInvoiceStrategy {
+        +generateInvoices()
+    }
+    class SingleMasterInvoiceStrategy {
+        +generateInvoices()
+    }
+    class IndividualRoomLeaseStrategy {
+        +generateInvoices()
+    }
+
+    IRoommateBillingStrategy <|.. JointSeveralSplitInvoiceStrategy
+    IRoommateBillingStrategy <|.. SingleMasterInvoiceStrategy
+    IRoommateBillingStrategy <|.. IndividualRoomLeaseStrategy
 
     class IPaymentAllocationStrategy {
         <<interface>>
@@ -184,26 +256,36 @@ classDiagram
     IPaymentAllocationStrategy <|.. StrictFullAllocationStrategy
 ```
 
-### 5.1 `IUtilityCalculationStrategy`
+### 5.1 `IUtilityCalculationStrategy` (with CAM Deduction)
 - **`SubMeterCalculationStrategy`**: Charge = $(Reading_{current} - Reading_{previous}) \times RatePerUnit$.
-- **`EqualSplitCalculationStrategy`**: Charge = $MasterBillAmount / ActiveOccupantCount$.
-- **`RubsSqftCalculationStrategy`**: Charge = $MasterBillAmount \times (SpaceSqFt / TotalPropertySqFt)$.
+- **`EqualSplitCalculationStrategy`**: Charge = $(MasterBill \times (1 - CamAllowancePct)) / ActiveOccupantCount$.
+- **`RubsSqftCalculationStrategy`**: Charge = $(MasterBill \times (1 - CamAllowancePct)) \times (SpaceSqFt / TotalPropertySqFt)$.
 - **`FlatFeeCalculationStrategy`**: Fixed recurring amount defined in lease agreement.
 
-### 5.2 `IPaymentAllocationStrategy`
-- **`FifoWaterfallAllocationStrategy` (Default)**: Payments clear oldest outstanding invoices first. Within an invoice, funds clear `BASE_RENT` first, followed by `UTILITIES`, then `LATE_FEES` and other charges.
+### 5.2 `IRoommateBillingStrategy`
+- **`JointSeveralSplitInvoiceStrategy`**: Generates individualized invoices per roommate based on configured split percentages (e.g. 50/50), while retaining joint legal liability on the underlying lease.
+- **`SingleMasterInvoiceStrategy`**: Generates one master invoice for the entire unit; roommates make partial payments toward the shared balance.
+- **`IndividualRoomLeaseStrategy`**: Generates an independent invoice for each private bedroom lease, with common utilities split among current active occupants.
+
+### 5.3 `IPaymentAllocationStrategy`
+- **`FifoWaterfallAllocationStrategy` (Default)**: Payments clear oldest outstanding invoices first. Within an invoice, funds clear `BASE_RENT` first, followed by `UTILITIES`, then `MAINTENANCE_CHARGEBACKS`, then `LATE_FEES`.
 - **`ProportionalAllocationStrategy`**: Funds distributed pro-rata across all unpaid line items based on their percentage of the remaining balance.
 - **`StrictFullAllocationStrategy`**: Rejects partial allocation; holds funds in unapplied credit until full invoice amount is satisfied.
 
-### 5.3 `ILateFeeStrategy`
+### 5.4 `ILateFeeStrategy`
 - **`FlatLateFeeStrategy`**: Assesses a single fixed amount (e.g. $50) if balance remains unpaid after the grace period.
 - **`PercentageLateFeeStrategy`**: Assesses a percentage (e.g. 5%) of unpaid base rent.
 - **`DailyAccruingLateFeeStrategy`**: Assesses a daily rate (e.g. $10/day) beginning day after grace period up to a statutory ceiling.
 - **`NoLateFeeStrategy`**: Zero late fee assessed.
 
-### 5.4 `IProrationStrategy`
+### 5.5 `IProrationStrategy`
 - **`ActualDaysProrationStrategy`**: $DailyRate = MonthlyRent / DaysInActualMonth$. Partial Month = $DailyRate \times DaysOccupied$.
 - **`ThirtyDayStandardProrationStrategy` (Banker's Rule)**: $DailyRate = MonthlyRent / 30$. Partial Month = $DailyRate \times DaysOccupied$.
+
+### 5.6 `IMeterValidationPolicy`
+- **`DecreasingReadingPolicy`**: Blocks any reading where $Reading_{curr} < Reading_{prev}$ unless an explicit `MeterResetEvent` is provided.
+- **`SpikeDetectionPolicy`**: Automatically flags readings exceeding 200% of the 3-reading rolling average as `FLAGGED_SPIKE`, holding invoice dispatch until supervisor confirmation.
+- **`PermissivePolicy`**: Records readings without automated threshold blocks.
 
 ---
 
@@ -245,6 +327,36 @@ stateDiagram-v2
     VOIDED --> [*]
 ```
 
+### 6.3 Maintenance Work Order State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> SUBMITTED: Renter or Landlord logs ticket
+    SUBMITTED --> DISPATCHED: Technician/Vendor assigned
+    DISPATCHED --> IN_PROGRESS: Technician begins work on site
+    IN_PROGRESS --> COMPLETED: Repair finished & costs logged
+    COMPLETED --> CLOSED_OWNER_EXPENSE: Cost absorbed by property owner
+    COMPLETED --> BILLED_TO_RENTER: Chargeback line item appended to next invoice
+    CLOSED_OWNER_EXPENSE --> [*]
+    BILLED_TO_RENTER --> [*]
+```
+
+### 6.4 Lease Renewal Offer State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> OFFER_GENERATED: 60/90-day trigger fires
+    OFFER_GENERATED --> DELIVERED: Sent to resident with revised terms
+    DELIVERED --> ACCEPTED: Resident accepts new terms
+    DELIVERED --> DECLINED: Resident declines / gives notice to vacate
+    DELIVERED --> COUNTERED: Resident proposes counter-rate
+    COUNTERED --> DELIVERED: Landlord accepts or amends offer
+    ACCEPTED --> NEW_LEASE_EXECUTED: New lease agreement activated
+    DECLINED --> UNDER_NOTICE: Transition lease to UNDER_NOTICE
+    NEW_LEASE_EXECUTED --> [*]
+    UNDER_NOTICE --> [*]
+```
+
 ---
 
 ## 7. Security Deposit Escrow & Move-Out Settlement
@@ -254,17 +366,20 @@ sequenceDiagram
     autonumber
     actor Landlord
     participant Lease as LeaseAgreement
-    participant Escrow as SecurityDepositLedger
+    participant Escrow as SecurityDepositEscrowLedger
     actor Renter
 
     Note over Landlord,Renter: 1. Lease Inception
-    Renter->>Escrow: Tenders Deposit ($1,500)
+    Renter->>Escrow: Tenders Deposits (Security: $1,500, Pet: $300)
     Escrow-->>Lease: Mark Deposit Status: HELD_IN_ESCROW
 
-    Note over Landlord,Renter: 2. Move-Out Inspection & Reconciliation
+    Note over Landlord,Renter: 2. Tenancy Period
+    Escrow->>Escrow: Accrue Jurisdictional Statutory Interest ($18/yr)
+
+    Note over Landlord,Renter: 3. Move-Out Inspection & Reconciliation
     Landlord->>Escrow: Record Itemized Deductions
-    Note right of Escrow: - Unpaid Rent: $200<br/>- Repairs / Paint: $150<br/>- Final Electric: $75<br/>Total Deductions: $425
-    Escrow->>Escrow: Calculate Net Settlement ($1,500 - $425 = $1,075)
-    Escrow->>Renter: Disburse Refund Statement & $1,075 Check/Transfer
+    Note right of Escrow: - Unpaid Rent: $200<br/>- Repairs / Paint (WorkOrder-12): $150<br/>- Final Electric: $75<br/>Total Deductions: $425
+    Escrow->>Escrow: Calculate Settlement ($1,800 + $18 - $425 = $1,393)
+    Escrow->>Renter: Disburse Statement & $1,393 Refund
     Escrow-->>Lease: Mark Status: SETTLED -> Transition to CLOSED
 ```

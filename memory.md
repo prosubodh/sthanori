@@ -431,6 +431,44 @@
   - **Positive**: Clean, collision-free ubiquitous language; total business alignment before writing implementation code; extreme modularity through domain strategies; auditable financial ledger architecture.
   - **Trade-offs**: Requires building domain strategy implementations for each billing variant.
 
+---
+
+## ADR-013: Deep-Dive Domain Model Extensions: Roommate Split Invoicing, Owner Disbursements, CAM, Work Orders, and Utility Anomaly Guards
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Following the baseline domain analysis, a deeper exploration of real-world operational realities across property management, utility billing, and co-living revealed several sophisticated requirements:
+  1. *Roommate & Co-Living Billing*: Managing multi-renter households requires supporting both Joint & Several liability with individualized sub-invoices, single master invoices, and room-by-room leases.
+  2. *Third-Party Property Ownership*: Managing assets for external property investors requires tracking management fee percentage commissions and generating net owner disbursement statements.
+  3. *Common Area Maintenance (CAM)*: Allocating shared house utilities (hallway lighting, lobby HVAC, elevators) via landlord absorption, percentage deductions before RUBS, or itemized surcharges.
+  4. *Maintenance Work Orders & Cost Attribution*: Distinguishing between landlord operating expenses and tenant chargebacks (invoiced on the renter's subsequent bill for tenant-caused damages).
+  5. *Lease Renewals & Stepped Rent Escalation*: Automated 60/90-day renewal proposals and scheduled future rent adjustments over multi-year commercial/residential leases.
+  6. *Deposit Escrow Banking & Jurisdictional Interest*: Multi-type deposits (security, pet, key, advance rent), designated escrow accounts, and statutory annual interest accrual.
+  7. *Utility Anomaly Gates*: Protecting against typographical errors, pipe leaks, and meter rollovers (>200% spike threshold or decreasing readings) before invoice generation.
+
+- **Decision**:
+  1. **Configurable Strategy Extensions**:
+     - Adopt `IRoommateBillingStrategy`: `JointSeveralSplitInvoiceStrategy`, `SingleMasterInvoiceStrategy`, and `IndividualRoomLeaseStrategy`.
+     - Adopt `ICamCalculationStrategy`: `LandlordAbsorptionStrategy`, `MasterBillDeductionPercentageStrategy`, and `ItemizedCamSurchargeStrategy`.
+     - Adopt `IMeterValidationPolicy`: `DecreasingReadingPolicy`, `SpikeDetectionPolicy` (>200% threshold), and `PermissivePolicy`.
+  2. **Aggregate Model Extensions**:
+     - Introduce `PropertyOwnerAggregate` to model external property investors and monthly disbursement statements.
+     - Introduce `MaintenanceWorkOrderAggregate` with financial cost attribution (`LANDLORD_EXPENSE` vs. `TENANT_CHARGEBACK`).
+     - Expand `LeaseAgreementAggregate` with `RentEscalationSchedule` and 60/90-day renewal offer proposal workflows.
+     - Expand `SecurityDepositEscrowLedger` with multi-deposit categories, escrow bank tagging, and statutory interest accrual.
+  3. **Documentation Assets**:
+     - Fully updated and expanded [`docs/DOMAIN_ANALYSIS.md`](file:///home/prosubodh/projects/sthanori/docs/DOMAIN_ANALYSIS.md) and [`docs/BUSINESS_REQUIREMENTS.md`](file:///home/prosubodh/projects/sthanori/docs/BUSINESS_REQUIREMENTS.md).
+
+- **Rationale & Alternatives**:
+  - *Alternatives Considered*: Treating roommates only as a single lumped bill was rejected because co-living operators and modern apartment renters demand individual billing and payment autonomy. Treating maintenance purely as a text note was rejected because tenant damage chargebacks represent a major financial revenue recovery item.
+  - *Strategy Pattern*: Keeping all variants configurable via feature flags and factories ensures zero tenant conditionals in domain core.
+
+- **Consequences**:
+  - **Positive**: Complete real-world market readiness for residential complexes, co-living operators, and commercial management companies; auditable fiduciary accounting; automated leak and typo detection.
+  - **Trade-offs**: Expands the domain model to include work orders and owner disbursements alongside leases and utility meters.
+
+
 
 
 
