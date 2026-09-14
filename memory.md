@@ -331,4 +331,70 @@
   - **Positive**: Zero assumptions; strict boundary isolation between domain core, database, and presentation; end-to-end type safety; sub-second linting and testing; predictable day-1 container parity.
   - **Trade-offs**: Requires setting up initial workspace boilerplate (pnpm, Turborepo, Biome, TypeScript project references).
 
+---
+
+## ADR-011: Feature-Driven Hexagonal Folder Structure and Sibling Test Colocation Protocol
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Organizing files within a multi-package hexagonal monorepo requires an explicit architectural standard to avoid two prevalent industry anti-patterns:
+  1. *Horizontal Layer Smushing*: Dumping all controllers in `/controllers`, all services in `/services`, and all entities in `/entities`. This fractures feature cohesion, requiring developers to jump across 6 directories to touch one feature, and creates hidden circular dependencies.
+  2. *Decoupled Unit Test Mirrors*: Placing unit tests in a mirrored top-level `test/` folder separate from `src/`. In large monorepos, mirrored test folders lead to orphaned tests when source files are renamed or relocated, brittle deep relative import paths (`../../src/modules/...`), and poor developer discovery.
+
+- **Decision**:
+  Adopt **Feature-Driven Hexagonal Structure with Dual-Tier Test Pairing**:
+  1. **Dual-Tier Test Pairing Protocol**:
+     - **Unit, Port, and Component Tests (`*.spec.ts` / `*.spec.tsx`)**: Strictly colocated as **direct siblings** in the same directory as the source file under test (e.g. `order.entity.ts` paired with `order.entity.spec.ts`).
+     - **Acceptance & End-to-End Tests (`*.e2e-spec.ts`)**: Decoupled in dedicated application-level directories (`apps/api/test/` for HTTP API acceptance, `apps/web/e2e/` for Playwright browser tests).
+  2. **Backend Hexagonal Module Layout (`apps/api`)**:
+     Organize by feature vertical slices conforming to Hexagonal Architecture:
+     ```text
+     apps/api/src/modules/<feature>/
+     ├── domain/                  # Feature domain models & outbound ports
+     │   ├── <feature>.entity.ts
+     │   ├── <feature>.entity.spec.ts      <-- Sibling test
+     │   └── ports/
+     │       └── <feature>.repository.port.ts
+     ├── application/             # Use cases & application orchestration
+     │   ├── <feature>.service.ts
+     │   └── <feature>.service.spec.ts     <-- Sibling unit test (mocking ports)
+     ├── infrastructure/          # Adapters (persistence, external gateways)
+     │   └── <feature>.drizzle.repository.ts
+     │   └── <feature>.drizzle.repository.spec.ts
+     ├── presentation/            # Primary adapters (HTTP controllers & DTOs)
+     │   ├── <feature>.controller.ts
+     │   ├── <feature>.controller.spec.ts  <-- Sibling unit test
+     │   └── dto/
+     │       └── <feature>.dto.ts
+     └── <feature>.module.ts      # NestJS Composition Root wiring
+     ```
+  3. **Frontend Feature Layout (`apps/web`)**:
+     Organize by routes and colocated feature logic:
+     ```text
+     apps/web/src/
+     ├── routes/                  # TanStack Router file-based route definitions
+     │   ├── __root.tsx
+     │   └── index.tsx
+     ├── features/<feature>/      # Cohesive feature domain
+     │   ├── components/          # Feature UI components + sibling *.spec.tsx
+     │   ├── hooks/               # Custom hooks + sibling *.spec.ts
+     │   └── queries/             # TanStack Query queryOptions definitions
+     └── components/ui/           # Shared shadcn/Radix accessible primitives
+     ```
+  4. **Domain & Shared Packages (`packages/*`)**:
+     - `packages/domain`: Pure Domain Core models (`core/`, `aggregates/`, `entities/`, `value-objects/`, `events/`, `policies/`) with sibling `*.spec.ts`.
+     - `packages/db`: Drizzle schemas (`schema/`), migrations (`migrations/`), client pool, and RLS session injection helpers with sibling `*.spec.ts`.
+     - `packages/shared`: Zod validation schemas, error envelopes, and HTTP contract DTOs with sibling `*.spec.ts`.
+     - `packages/ui`: Design tokens and headless primitives with sibling `*.spec.ts`.
+
+- **Rationale & Alternatives**:
+  - *Alternative Considered (Mirrored Test Folder for Unit Tests)*: Rejected because moving or deleting a feature requires manual pruning in two distant trees, and developer tests are frequently forgotten or bypassed during refactoring.
+  - *Alternative Considered (Flat Layer-by-Type Structure)*: Rejected because grouping by type (all controllers together) impairs modularity and prevents encapsulating feature boundaries.
+
+- **Consequences**:
+  - **Positive**: Cohesive feature encapsulation; refactor-safe test mobility; zero orphaned tests; instant sub-second test discovery; clear architectural separation between Domain Core, Application, and Adapters.
+  - **Trade-offs**: Requires configuring toolchains (such as TanStack Router) to ignore sibling `*.spec.*` files during route generation (already configured).
+
+
 
