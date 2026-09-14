@@ -130,7 +130,23 @@
 - **FR-15.2**: The system must support optional statutory annual interest accrual credited to the renter or settled at move-out.
 - **FR-15.3**: Upon lease termination, the system must provide an itemized Move-Out Settlement workflow deducting unpaid rent, utilities (via move-out strategy), cleaning, and repair damages, generating a formal statement with net refund / balance due.
 
+### Module 16: Multi-Utility Tariff Engine & Cascading Meter Trees
+- **FR-16.1**: The system must support advanced tariff structures via `ITariffEvaluationStrategy`:
+  - Single flat unit rate.
+  - Inclining block tariffs (IBT) with multi-tier thresholds.
+  - Two-part tariffs combining fixed monthly readiness fees with volumetric charges.
+  - Time-of-Use (TOU) schedules distinguishing peak, mid-peak, and off-peak rate windows.
+  - Seasonal multipliers for summer peak versus winter baseline periods.
+- **FR-16.2**: The system must model sewer/wastewater charges via `ISewerCalculationStrategy`:
+  - Direct percentage of clean water consumption.
+  - Winter Quarter Average (WQA) seasonal baseline capping sewer volume during non-irrigation periods.
+  - Flat municipal monthly sewer fees.
+- **FR-16.3**: The system must support EV charging billing via `IEvChargingTariffStrategy` combining metered energy (kWh), connection session fees, and post-charge parking idle dwell penalties.
+- **FR-16.4**: The system must support cascading meter hierarchies (Master Meter $\to$ Building Sub-stations $\to$ Unit & CAM Sub-meters) with automated line-loss variance auditing ($>5\%$ discrepancy trigger).
+- **FR-16.5**: The system must support configurable solar net-metering and master bill reconciliation via `IUtilityDiscrepancyStrategy` (`LandlordAbsorptionStrategy` vs. `ProportionalPassThroughStrategy`).
+
 ---
+
 
 ## 4. Non-Functional Requirements (NFR)
 

@@ -507,6 +507,43 @@
   - **Positive**: Complete coverage of real-world rental billing complexities; legally sound eviction and deposit workflows; maximized ancillary revenue tracking; total clarity for implementation.
   - **Trade-offs**: Requires building rich validation rules and multi-party workflows (renter submission $\to$ landlord review).
 
+---
+
+## ADR-015: Advanced Multi-Utility Tariff Engine, Sewer Baselining, EV Charging, and Cascading Meter Trees
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Real-world real estate utility operations encompass diverse physical services and complex pricing models that go far beyond flat-rate sub-metering:
+  1. *Multi-Resource Physics*: Services span electricity (`KWH`, `KW` peak demand), clean water (`GALLONS`, `CCF`, `CUBIC_METERS`), unmetered wastewater/sewer, natural gas (`THERMS`), central chilled water (`TON_HOURS`), high-speed internet tiers, trash bins, and EV charging stations.
+  2. *Complex Tariff Structures*: Utility providers employ inclining block tariffs (IBT), two-part tariffs (fixed customer readiness charge + volumetric usage), Time-of-Use (TOU) windows (peak/off-peak/shoulder), and seasonal summer/winter multipliers.
+  3. *Wastewater/Sewer Baselining*: Wastewater outflow is unmetered. Naive 100% water coupling overcharges residents who water plants. The Winter Quarter Average (WQA) method is standard industry practice to cap sewer billing during non-irrigation seasons.
+  4. *EV Charging Fleet Management*: Electric vehicle stations require multi-factor billing (energy delivered + session initiation + punitive idle dwell penalties post-grace period) to prevent charger hogging.
+  5. *Cascading Meter Trees & Virtual CAM*: Large properties route power through hierarchical distribution panels (Master Meter $\to$ Sub-station $\to$ Unit Sub-meters + CAM panel). The system must derive virtual CAM when unmetered and flag distribution line loss (>5% variance).
+  6. *Solar Net-Metering & Master Discrepancies*: Rooftop solar generation and master bill bulk discounts require configurable allocation (`LandlordAbsorption` vs. `ProportionalPassThrough`).
+
+- **Decision**:
+  1. **New Aggregates & Value Objects**:
+     - `UtilityTariffAggregate`: Encapsulates `TariffStructureType` (`SINGLE_RATE`, `INCLINING_BLOCK_TIERED`, `TWO_PART_FIXED_VOLUMETRIC`, `TIME_OF_USE`), fixed monthly customer readiness charge, contiguous rate tiers (`minUnits`, `maxUnits`, `ratePerUnit`), Time-of-Use rate windows, and seasonal multipliers.
+     - Hierarchical Meter Tree: `UtilityMeterAggregate` encapsulates optional `ParentMeterId`, virtual CAM calculation, and automated line loss threshold auditing ($>5\%$).
+  2. **Configurable Strategy Extensions**:
+     - `ITariffEvaluationStrategy`: `SingleRateTariffStrategy`, `IncliningBlockTariffStrategy`, `TwoPartTariffStrategy`, `TimeOfUseTariffStrategy`.
+     - `ISewerCalculationStrategy`: `WaterPercentageSewerStrategy`, `WinterQuarterAverageSewerStrategy` (WQA), and `FlatSewerFeeStrategy`.
+     - `IEvChargingTariffStrategy`: `MultiFactorEvChargingStrategy` (energy + session fee + idle penalty).
+     - `IUtilityDiscrepancyStrategy`: `LandlordAbsorptionStrategy` (default) and `ProportionalPassThroughStrategy`.
+  3. **Formalized Documentation**:
+     - Updated [`docs/DOMAIN_ANALYSIS.md`](file:///home/prosubodh/projects/sthanori/docs/DOMAIN_ANALYSIS.md) (Section 8).
+     - Updated [`docs/BUSINESS_REQUIREMENTS.md`](file:///home/prosubodh/projects/sthanori/docs/BUSINESS_REQUIREMENTS.md) (Module 16).
+
+- **Rationale & Alternatives**:
+  - *Strategy Pattern*: Keeps all algorithmic variations isolated behind domain ports, resolved via feature flags and factories (ADR-007). Zero tenant branching in Domain Core.
+  - *Decoupled Tariff Aggregate*: Decouples physical meters (hardware, serial number, pulse multiplier, location) from commercial tariffs (effective dates, rates, tiers, seasonal adjustments).
+
+- **Consequences**:
+  - **Positive**: Full-spectrum market readiness for residential complexes, commercial retail/office buildings, and co-living operators with complex utility structures; automated leak and line-loss detection; fair sewer and solar accounting.
+  - **Trade-offs**: Requires building tier validation and time-window resolution in domain services.
+
+
 
 
 

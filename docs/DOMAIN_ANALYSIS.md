@@ -417,3 +417,162 @@ sequenceDiagram
     Escrow->>Renter: Disburse Statement & $1,393 Refund
     Escrow-->>Lease: Mark Status: SETTLED -> Transition to CLOSED
 ```
+
+---
+
+## 8. Utility Tariff Engine & Multi-Utility Modeling
+
+### 8.1 Multi-Utility Classification & Physical Metrics
+
+Utility billing extends beyond simple single-rate sub-metering. Sthanori models multi-resource utility physics, accounting for divergent measurement units, fixed connection overheads, and derived utility volumes:
+
+| Utility Type | Native Unit of Measure | Pricing Models Supported | Physical Invariants & Calculation Nuance |
+| :--- | :--- | :--- | :--- |
+| **Electricity** | `KWH`, `KW_PEAK_DEMAND` | Single Flat, Inclining Block (IBT), Two-Part, Time-of-Use (TOU) | Sub-meter dial reads cumulative kWh. Commercial meters may also track peak kW demand. |
+| **Clean Water** | `GALLONS`, `CUBIC_METERS`, `CCF` ($1\text{ CCF} = 748\text{ gal}$) | Tiered Block, Two-Part (Base meter fee + volumetric) | Flow meters measure cumulative volume. Must detect reverse flow / backflow anomalies. |
+| **Sewer / Wastewater** | `VOLUMETRIC_EQUIVALENT` | Percentage of Water, Winter Quarter Average (WQA), Flat | Wastewater outflow is unmetered; derived mathematically from inbound water volume. |
+| **Natural Gas / Heating** | `THERMS`, `CUBIC_METERS`, `BTU` | Single Rate, Seasonal Winter Multiplier | Volumetric gas is multiplied by the utility's thermal conversion factor to obtain therms. |
+| **Central HVAC / Chilled Water**| `TON_HOURS`, `BTU` | BTU sub-metering, RUBS by SqFt | Common in commercial suites and modern high-rises; measures delta-T and water flow. |
+| **High-Speed Internet / WiFi** | `BANDWIDTH_TIER_MBPS`, `DEDICATED_CIRCUIT`| Flat Monthly Tier, Pooled Bandwidth Surcharge | Bulk property contract (wholesale) allocated to renters at fixed retail tiers (e.g. 500 Mbps, 1 Gbps). |
+| **Trash & Recycling** | `CONTAINER_VOLUME_GALLONS`, `PICKUP_FREQUENCY` | Equal Split per Unit, Flat Fee per Bin, Overage Surcharge | Base municipal container allocation plus tenant chargebacks for bulky item disposal. |
+| **EV Charging Stations** | `KWH_CONSUMED`, `IDLE_DWELL_MINUTES` | Multi-Factor: Energy + Session Fee + Idle Penalty | Tracks energy delivered plus idle dwell penalties ($/min) after a 30-minute post-charge grace window. |
+
+---
+
+### 8.2 `UtilityTariffAggregate`
+
+- **Identity**: `TariffId`, immutable `tenantId`.
+- **Properties**:
+  - `UtilityType`: `ELECTRICITY`, `WATER`, `SEWER`, `GAS`, `HVAC_COOLING`, `INTERNET`, `TRASH`, `EV_CHARGING`.
+  - `TariffStructureType`: `SINGLE_RATE`, `INCLINING_BLOCK_TIERED`, `TWO_PART_FIXED_VOLUMETRIC`, `TIME_OF_USE`.
+  - `Currency`: ISO 4217 currency code (e.g. `USD`, `EUR`, `CAD`).
+  - `EffectiveDateRange`: `StartDate`, `EndDate` (for time-versioned tariff rate hikes).
+  - `FixedCustomerCharge`: Fixed monthly base fee in minor currency units (e.g. $18.50/mo connection readiness).
+  - `RateTiers`: Array of tier boundaries and unit rates:
+    `[{ tierNumber: 1, minUnits: 0, maxUnits: 300, ratePerUnit: 1200 }, { tierNumber: 2, minUnits: 301, maxUnits: 600, ratePerUnit: 1800 }, { tierNumber: 3, minUnits: 601, maxUnits: null, ratePerUnit: 2800 }]`
+  - `TimeOfUseWindows`: Peak, Off-Peak, and Shoulder rate schedules:
+    - *Off-Peak* (23:00 - 07:00): Base rate ($0.09/kWh).
+    - *Mid-Peak / Shoulder* (07:00 - 14:00, 20:00 - 23:00): Medium rate ($0.16/kWh).
+    - *On-Peak* (14:00 - 20:00): High rate ($0.34/kWh).
+  - `SeasonalMultiplier`: Seasonal adjustment factor (e.g. 1.25x during summer peak months June–September).
+- **Invariants**:
+  - Tier boundaries must be continuous without gaps or overlaps (Tier $N$ `minUnits` must equal Tier $N-1$ `maxUnits` $+ 1$).
+  - Rates must be non-negative integers in minor currency units.
+
+---
+
+### 8.3 Specialized Utility Calculation Strategies
+
+```mermaid
+classDiagram
+    class ITariffEvaluationStrategy {
+        <<interface>>
+        +evaluateCost(unitsConsumed, tariff, context) MonetaryAmount
+    }
+    class SingleRateTariffStrategy {
+        +evaluateCost()
+    }
+    class IncliningBlockTariffStrategy {
+        +evaluateCost()
+    }
+    class TwoPartTariffStrategy {
+        +evaluateCost()
+    }
+    class TimeOfUseTariffStrategy {
+        +evaluateCost()
+    }
+
+    ITariffEvaluationStrategy <|.. SingleRateTariffStrategy
+    ITariffEvaluationStrategy <|.. IncliningBlockTariffStrategy
+    ITariffEvaluationStrategy <|.. TwoPartTariffStrategy
+    ITariffEvaluationStrategy <|.. TimeOfUseTariffStrategy
+
+    class ISewerCalculationStrategy {
+        <<interface>>
+        +calculateSewerCharge(waterVolume, winterAverage, tariff) MonetaryAmount
+    }
+    class WaterPercentageSewerStrategy {
+        +calculateSewerCharge()
+    }
+    class WinterQuarterAverageSewerStrategy {
+        +calculateSewerCharge()
+    }
+    class FlatSewerFeeStrategy {
+        +calculateSewerCharge()
+    }
+
+    ISewerCalculationStrategy <|.. WaterPercentageSewerStrategy
+    ISewerCalculationStrategy <|.. WinterQuarterAverageSewerStrategy
+    ISewerCalculationStrategy <|.. FlatSewerFeeStrategy
+
+    class IEvChargingTariffStrategy {
+        <<interface>>
+        +calculateSessionCost(kwhConsumed, sessionMinutes, idleMinutes, tariff) EvChargeBreakdown
+    }
+    class MultiFactorEvChargingStrategy {
+        +calculateSessionCost()
+    }
+    IEvChargingTariffStrategy <|.. MultiFactorEvChargingStrategy
+```
+
+#### 8.3.1 Sewer / Wastewater Calculation Algorithms (`ISewerCalculationStrategy`)
+1. **`WaterPercentageSewerStrategy`**:
+   - Assumes a fixed percentage of clean metered water enters the sewer system (e.g., 90% or 100%).
+   - Formula: $\text{BillableSewerUnits} = \text{MeteredWaterUnits} \times \text{DischargeFactorPct}$.
+2. **`WinterQuarterAverageSewerStrategy` (WQA)**:
+   - Eliminates unfair sewer charges caused by summertime garden/balcony irrigation or car washing where water does not enter wastewater treatment.
+   - Calculates baseline average monthly water consumption during designated winter months (typically December, January, February).
+   - In all subsequent months, billable sewer volume is capped at the lesser of actual water consumption or the established WQA baseline.
+   - Formula: $\text{BillableSewerUnits} = \min(\text{CurrentWaterUnits}, \text{WqaBaselineUnits})$.
+3. **`FlatSewerFeeStrategy`**:
+   - Fixed municipal sewer surcharge assigned per rentable space regardless of water consumption.
+
+#### 8.3.2 EV Charging Billing Algorithm (`IEvChargingTariffStrategy`)
+- **`MultiFactorEvChargingStrategy`**:
+  - $\text{TotalCost} = \text{SessionFee} + (\text{KwhConsumed} \times \text{TariffRate}) + \text{IdlePenalty}$.
+  - Idle penalty accrues only if the vehicle remains plugged in past the configured grace period (e.g. 30 minutes after charge completion) at a punitive per-minute rate (e.g. $0.50/minute) to incentivize charger turnover.
+
+---
+
+### 8.4 Cascading Sub-Meter Trees & Virtual Metering
+
+In multi-unit residential complexes and commercial centers, meters are physically installed in hierarchical tree structures:
+
+```mermaid
+flowchart TD
+    MainElectric["Property Master Electric Meter (Utility Co)"]
+    HousePanel["House / Common Area Panel (CAM)"]
+    BuildingA["Building A Sub-Station Meter"]
+    BuildingB["Building B Sub-Station Meter"]
+    Unit1["Unit 101 Sub-Meter"]
+    Unit2["Unit 102 Sub-Meter"]
+    Unit3["Unit 201 Sub-Meter"]
+    EVChargerBank["EV Charging Sub-Meter"]
+
+    MainElectric --> HousePanel
+    MainElectric --> BuildingA
+    MainElectric --> BuildingB
+    BuildingA --> Unit1
+    BuildingA --> Unit2
+    BuildingB --> Unit3
+    BuildingB --> EVChargerBank
+```
+
+- **Tree Invariants & Virtual Metering**:
+  - Every sub-meter references an optional `ParentMeterId`.
+  - **Virtual Common Area Sub-Meter**: If common area consumption is not directly sub-metered, the system can dynamically derive CAM usage as:
+    $$\text{VirtualCamUsage} = \text{MasterMeterUsage} - \sum_{i=1}^{N} \text{UnitSubMeterUsage}_i$$
+  - **Line Loss & Discrepancy Auditing**: When physical CAM meters exist alongside unit sub-meters, electrical line loss and plumbing seepage cause physical discrepancies:
+    $$\text{VariancePct} = \frac{\text{MasterUsage} - (\sum \text{UnitSubMeters} + \text{CamMeter})}{\text{MasterUsage}} \times 100\%$$
+    If $\text{VariancePct} > \text{LossThresholdPct}$ (default $5.0\%$), an automated **Distribution Leak / Line Loss Audit Alert** is triggered for facility maintenance.
+
+---
+
+### 8.5 Solar Net-Metering & Master Discrepancy Reconciliation
+
+Properties equipped with rooftop solar PV arrays generate distributed energy that offsets the utility company's master bill:
+
+- **`IUtilityDiscrepancyStrategy`**:
+  1. **`LandlordAbsorptionStrategy` (Default)**: Renters are billed strictly based on their individual sub-meter consumption evaluated against standard municipal utility tariff rates. All solar net-metering credits, green energy incentives, bulk master volume discounts, and line losses are retained/absorbed directly by the property owner.
+  2. **`ProportionalPassThroughStrategy`**: Any net credits (or line loss surcharges) reflected on the utility company's master bill are distributed across active renters in proportion to each renter's share of total metered consumption during the billing period.
+
