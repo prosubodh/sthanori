@@ -898,5 +898,82 @@ classDiagram
    - Collected fees pool into an internal **Landlord Risk Reserve**.
    - Upon tenant move-out, unpaid damages up to a designated cap (e.g. $2,000) are absorbed directly by the landlord's risk reserve pool, forgiving the tenant's liability.
 
+---
+
+## 11. Multi-Language & Dual Calendar Architecture (`en`, `ne`, and Bikram Sambat `BS`)
+
+### 11.1 Bilingual Language Strategy (English & Nepali)
+
+Sthanori is designed for native bilingual operations, supporting **English (`en`)** and **Nepali (`ne` — नेपाली in Devanagari script)** as mandatory first-class citizens across all layers:
+
+| Layer | English (`en`) | Nepali (`ne` / नेपाली) | Invariants & Operational Nuances |
+| :--- | :--- | :--- | :--- |
+| **Client UI (Static i18n)** | Western English copy | Devanagari Unicode strings | Pure type-safe translation keys; zero missing-key fallbacks. Instant UI language toggle without page reload. |
+| **Domain Content** | Space labels, lease notes, maintenance categories | Translated labels & custom localized notes | Essential system terms (e.g. `ELECTRICITY` $\to$ विद्युत्, `WATER` $\to$ खानेपानी, `INTERNET` $\to$ इन्टरनेट) are mapped via domain dictionaries. |
+| **Financial Invoices** | English invoice template | Devanagari Nepali template OR **Bilingual Dual-Column** | Dual-column format provides English terms alongside Devanagari equivalents for official ward/municipal recognition in Nepal. |
+| **Number & Currency** | Western digits (`150,000.00`) | Devanagari digits (`१,५०,०००.००`) or Western digits with Vedic commas (`1,50,000.00`) | Standardizes minor units (paisa/cents as integers); localized number formatting respects Lakhs/Crores grouping. |
+
+---
+
+### 11.2 Dual Calendar Engine: Bikram Sambat (`BS`) vs. Gregorian (`AD`)
+
+In Nepal, real estate transactions, government lease registrations, and financial cycles operate on the **Bikram Sambat (विक्रम संवत् — BS)** calendar (approximately $56.7\text{ years}$ ahead of the Gregorian calendar).
+
+```mermaid
+classDiagram
+    class ICalendarAdapter {
+        <<interface>>
+        +toBikramSambat(gregorianDate) BikramSambatDate
+        +toGregorian(bikramSambatDate) Date
+        +getDaysInBsMonth(yearBs, monthBs) number
+        +calculateBsBillingPeriod(yearBs, monthBs) DateRange
+    }
+    class BikramSambatAdapter {
+        +toBikramSambat()
+        +toGregorian()
+        +getDaysInBsMonth()
+        +calculateBsBillingPeriod()
+    }
+    ICalendarAdapter <|.. BikramSambatAdapter
+```
+
+- **Core Storage Invariant**: All timestamps in database tables and aggregate roots remain strictly **ISO 8601 (UTC / Gregorian AD)** (e.g. `2026-09-14T00:00:00Z`).
+- **Calendar Port (`ICalendarAdapter`)**:
+  - Pure domain adapter performing deterministic astronomical conversion between Gregorian (AD) and Bikram Sambat (BS).
+  - Nepali months:
+    1. *Baishakh (बैशाख)*: April–May
+    2. *Jestha (जेठ)*: May–June
+    3. *Ashadh (असार)*: June–July
+    4. *Shrawan (साउन)*: July–August
+    5. *Bhadra (भदौ)*: August–September
+    6. *Ashwin (असोज)*: September–October
+    7. *Kartik (कार्तिक)*: October–November
+    8. *Mangsir (मंसिर)*: November–December
+    9. *Poush (पुष)*: December–January
+    10. *Magh (माघ)*: January–February
+    11. *Falgun (फागुन)*: February–March
+    12. *Chaitra (चैत)*: March–April
+  - Variable Month Lengths: Unlike Gregorian months, Bikram Sambat month lengths vary from 29 to 32 days depending on solar transit. The `ICalendarAdapter` encapsulates official astronomical tables from 1970 BS to 2100 BS.
+- **Bikram Sambat Billing Cycle Support**:
+  - Leases can configure `BillingCycleAnchor`: `GREGORIAN_FIRST_OF_MONTH` (1st of Jan, Feb...) or `BIKRAM_SAMBAT_FIRST_OF_MONTH` (1st of Baishakh, Jestha...).
+  - When anchored to Bikram Sambat, the billing period automatically resolves the corresponding Gregorian `PeriodStartDate` and `PeriodEndDate`.
+
+---
+
+### 11.3 Bilingual Document Formatting (Invoices & Receipts)
+
+Invoices generated for properties in Nepal or international tenants support three rendering modes:
+1. **`ENGLISH_ONLY`**: Standard Western English invoice.
+2. **`NEPALI_ONLY`**: Devanagari Nepali script with Vedic currency notation.
+3. **`BILINGUAL_DUAL_COLUMN`**: Side-by-side bilingual format:
+   - Header: *Rental Invoice / घरभाडा बिल*
+   - Line Item: *Base Rent (Apt 4B) / मूल भाडा (कोठा ४ख)*
+   - Water Utility: *Metered Clean Water / खानेपानी महसुल*
+   - Electricity: *Sub-Metered Electricity / विद्युत् महसुल*
+   - Total Amount: *Total Balance Due / जम्मा भुक्तानी गर्नुपर्ने रकम*
+
+This layout satisfies international auditability while meeting local Nepalese tax and ward registration requirements.
+
+
 
 

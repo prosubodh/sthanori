@@ -244,7 +244,22 @@
   - Active occupants whose date ranges overlap must not exceed `RentableSpaceAggregate.MaxOccupants`.
   - Configurable policy: `HardCapacityBlockPolicy` (default, blocks over-occupancy) vs. `PermissiveWithOverageSurchargePolicy` (allows additional occupants with automatic monthly surcharge).
 
+### Module 19: Multi-Language, Localization & Dual Calendar (Bikram Sambat BS & Gregorian AD)
+- **FR-19.1**: The system must support mandatory **English (`en`)** and **Nepali (`ne` — नेपाली in Devanagari script)** localization across all client interfaces, notification templates (email/SMS), and error envelopes.
+- **FR-19.2**: `RenterProfileAggregate` and user settings must store `PreferredLanguage` (`en` | `ne`) and `PreferredCalendar` (`AD` | `BS`).
+- **FR-19.3**: The system must provide a bidirectional calendar engine via `ICalendarAdapter`:
+  - Internal timestamp storage remains strictly ISO 8601 (UTC / Gregorian AD).
+  - Supports converting between Gregorian (AD) and Bikram Sambat (BS: Baishakh through Chaitra).
+  - Supports anchoring recurring rental billing cycles to the 1st day of the Bikram Sambat calendar month (standard for Nepal property leasing).
+- **FR-19.4**: The system must support **Bilingual Financial Documents**:
+  - Invoices, payment receipts, and statutory legal notices can render in single-language (`en` or `ne`) or in a **Bilingual Dual-Column Layout** (English and Nepali side-by-side) to satisfy both corporate accounting standards and local municipal ward compliance in Nepal.
+- **FR-19.5**: The system must support localized number formatting:
+  - Western comma grouping (`100,000.00`).
+  - South Asian / Vedic comma grouping (`1,00,000.00` lakhs/crores).
+  - Optional rendering of numbers and currency amounts in Devanagari numerals (`०, १, २, ३, ४, ५, ६, ७, ८, ९`, e.g. `रु. १,५०,०००.००`).
+
 ---
+
 
 
 

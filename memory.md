@@ -646,6 +646,41 @@
   - **Positive**: Zero ambiguity remains; comprehensive, battle-tested domain model ready for implementation; fully configured for international multi-currency operations (USD & NPR).
   - **Trade-offs**: Rich domain models with numerous strategy interfaces, fully tested via mockist TDD.
 
+---
+
+## ADR-019: Mandatory Bilingual Architecture (English & Nepali), Bikram Sambat (BS) Dual Calendar Engine, and Dual-Script Financial Documents
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Operating real estate portfolios across Nepal and international commercial markets mandates deep localization that transcends simple client-side string translations:
+  1. *Mandatory Language Pair*: English (`en`) and Nepali (`ne` — नेपाली in Devanagari script) must be supported natively across all interfaces, notification templates (email/SMS), and error envelopes.
+  2. *Dual Calendar Reality (Bikram Sambat BS vs. Gregorian AD)*: All government leases, municipal ward registrations, tax years, and local rental agreements in Nepal officially run on the **Bikram Sambat (BS)** calendar. Unlike the Gregorian calendar, Bikram Sambat months vary dynamically from 29 to 32 days based on solar transit. Leases in Nepal frequently mandate rent due on the 1st of the Bikram Sambat month (e.g. 1st of Baishakh).
+  3. *Bilingual Legal & Tax Defensibility*: Invoices, payment receipts, and statutory eviction notices must satisfy both international corporate audits (English) and local municipal ward offices in Nepal (Devanagari Nepali).
+  4. *Devanagari Numerals & Vedic Grouping*: NPR amounts require formatting in South Asian / Vedic comma notation (Lakhs: `1,00,000`, Crores: `1,00,00,000`) and optional Devanagari digit rendering (`रु. १,५०,०००.००`).
+
+- **Decision**:
+  1. **Core Language & Storage Invariants**:
+     - English (`en`) and Nepali (`ne`) are locked as mandatory first-class system languages.
+     - Database timestamps and aggregate dates remain strictly **ISO 8601 (UTC / Gregorian AD)** to maintain database portability and query efficiency.
+  2. **Bikram Sambat Domain Adapter (`ICalendarAdapter`)**:
+     - Introduce `ICalendarAdapter` encapsulating deterministic astronomical conversion between Gregorian (AD) and Bikram Sambat (BS, 1970–2100 BS).
+     - Leases support configuring `BillingCycleAnchor`: `GREGORIAN_FIRST_OF_MONTH` or `BIKRAM_SAMBAT_FIRST_OF_MONTH`.
+  3. **Bilingual Document Rendering**:
+     - Financial documents support three layouts: `ENGLISH_ONLY`, `NEPALI_ONLY`, and `BILINGUAL_DUAL_COLUMN` (side-by-side English and Nepali line items).
+  4. **Documentation Assets**:
+     - Codified Module 19 in [`docs/BUSINESS_REQUIREMENTS.md`](file:///home/prosubodh/projects/sthanori/docs/BUSINESS_REQUIREMENTS.md).
+     - Codified Section 11 in [`docs/DOMAIN_ANALYSIS.md`](file:///home/prosubodh/projects/sthanori/docs/DOMAIN_ANALYSIS.md).
+
+- **Rationale & Alternatives**:
+  - *Adapter Pattern*: Isolating Bikram Sambat conversion behind `ICalendarAdapter` protects Domain Core from external calendar calculation libraries and preserves database UTC standards.
+  - *Dual-Column Layout*: Prevents managing separate conflicting document versions for international tenants and local municipal authorities.
+
+- **Consequences**:
+  - **Positive**: 100% native market readiness for Nepal and international operations; legally recognized documents for local ward offices; seamless dual calendar support.
+  - **Trade-offs**: Requires bundling or implementing astronomical Bikram Sambat tables (1970–2100 BS) in an owned infrastructure adapter.
+
+
 
 
 
