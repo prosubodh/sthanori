@@ -81,6 +81,7 @@
 - **Lock Timeouts & Concurrent Indexing**: Index creation must be non-blocking/concurrent. Migrations must enforce strict lock timeouts (e.g., `SET lock_timeout = '3s';`) to prevent connection pool exhaustion. Automated migration linting in CI.
 - **Forward-Only Migrations**: Downward rollbacks (`down.sql`) are strictly forbidden in production; all fixes must roll forward via new timestamped migrations.
 - **Idempotent Fixtures & Seeds**: Baseline seed fixtures must use idempotent upserts keyed on unique identifiers.
+- **PostgreSQL Native Row-Level Security (RLS) Baseline**: All tenant-partitioned tables must enforce RLS (`ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;`). Migration scripts must attach security policies using `USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid)`. Database adapters and transaction managers must inject `SET LOCAL app.current_tenant_id = ?` at connection checkout. Integration tests must assert that cross-tenant queries return zero records even when application-level `WHERE` clauses are omitted.
 - **Test Database Isolation**: Automated test suites must run against dedicated test datastores with deterministic setup/cleanup lifecycle hooks (`beforeEach`/`afterEach` or transactional rollbacks). Never hardcode secrets or admin passwords.
 
 ---

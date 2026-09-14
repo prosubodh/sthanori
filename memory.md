@@ -156,3 +156,31 @@
 - **Consequences**:
   - **Positive**: 100% transport-agnostic; all execution paths (HTTP, queues, CLI, cron) are protected uniformly; easily mockable and verifiable in unit tests; keeps Domain Core pure while guarding application entrypoints.
   - **Trade-offs**: Use cases must explicitly inject and call `IEntitlementPort`.
+
+---
+
+## ADR-006: Shared Database with Native PostgreSQL Row-Level Security (RLS) as Default Isolation Standard
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Selecting a baseline datastore isolation architecture in multi-tenant SaaS requires balancing operational overhead with security defense-in-depth:
+  1. *Application-Level Filtering Only (`WHERE tenant_id = ?`)*: High portability, but catastrophic blast radius: a single missing `WHERE` clause or raw SQL join leaks entire tables across tenants.
+  2. *Schema-per-Tenant from Day 1*: Clean physical schema boundaries, but severe operational friction: connection pool exhaustion, schema migration drift across hundreds of schemas, and heavy database server overhead.
+  3. *Pooled Database with Native Row-Level Security (RLS)*: A single shared database where PostgreSQL natively enforces tenant row isolation via session variables.
+
+- **Decision**:
+  Adopt **Pooled Database with Native PostgreSQL Row-Level Security (RLS)** as the default:
+  1. All tenant-partitioned tables must enable RLS (`ALTER TABLE <table> ENABLE ROW LEVEL SECURITY;`).
+  2. Migration scripts attach security policies using `USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid)`.
+  3. Database adapters/transaction managers inject `SET LOCAL app.current_tenant_id = ?` on connection checkout.
+  4. Integration tests must assert that cross-tenant queries return zero records even when application-level `WHERE` clauses are omitted.
+  5. Siloed schemas or dedicated databases are reserved strictly as an enterprise-tier upgrade (Capability 17).
+
+- **Rationale & Alternatives**:
+  - *Alternative Considered (Application Filtering Only)*: Rejected because human or AI coding errors in SQL queries can cause catastrophic data leakage breaches.
+  - *Alternative Considered (Schema-per-Tenant Day 1)*: Rejected due to migration fragility, deploy latency, and unneeded infrastructure complexity during initial growth phases.
+
+- **Consequences**:
+  - **Positive**: Automated defense-in-depth at the database kernel level; zero schema migration sprawl; highly cost-effective; seamless migration path to enterprise siloed schemas when required.
+  - **Trade-offs**: Requires setting session variables on transactions and configuring database roles properly (bypassing RLS requires explicit superuser/BYPASSRLS privileges).
