@@ -72,3 +72,35 @@
 - **Consequences**:
   - **Positive**: Eliminates premature scaffolding; ensures clean, minimal codebases; keeps container footprint minimal; establishes clear, repeatable protocols for every specialized capability when requested by tenants; completely protects Domain Core purity.
   - **Trade-offs**: Requires the agent to execute a Capability Discovery step during the Cognitive Loop prior to writing code or modifying container configurations.
+
+---
+
+## ADR-003: Enterprise Identity (SAML/SCIM), Tenant Lifecycle State Machine, Secure Impersonation, and Agent Data Hygiene
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Subsequent research into B2B enterprise SaaS architecture and autonomous coding agent failure modes revealed four critical enterprise-tier capability gaps and two operational agent safety gaps:
+  1. **Enterprise Identity**: Enterprise customers mandate SAML 2.0 / OIDC federation and automated directory user provisioning/deprovisioning via SCIM 2.0 to eliminate zombie accounts.
+  2. **Tenant Lifecycle & Degradation**: In production, tenants transition between lifecycle states (`PROVISIONING`, `ACTIVE`, `PAST_DUE`, `SUSPENDED`, `ARCHIVED`, `DELETED`). Without formal state-machine protocols, system behavior during billing suspensions or data archiving is unpredictable.
+  3. **Support Impersonation**: Platform engineers and customer support often need to troubleshoot in customer workspaces. Naive implementations introduce backdoor login vulnerabilities.
+  4. **Hierarchical Multi-Tenancy**: Enterprise organizations hold contracts with multiple subsidiary workspaces, requiring inherited entitlements and shared quota pooling.
+  5. **Agent Safety & Data Hygiene**: Coding agents often fail by hallucinating commands, outputting unmasked credentials into logs/traces, or attempting bug fixes without writing regression reproduction tests first.
+
+- **Decision**:
+  1. **Enterprise Capabilities Expansion (Part II)**:
+     - Add **Capability 22: Enterprise SSO (SAML 2.0 / OIDC) & SCIM 2.0 Directory Sync** via owned `ISSOAdapter` and tenant-scoped IdP metadata.
+     - Add **Capability 23: Tenant Lifecycle State Machine & Service Degradation** (predictable suspension, background job quarantine, read-only gating).
+     - Add **Capability 24: Secure Support Impersonation & Audit Access** with ephemeral tokens ($\le$ 60m), dual-identity audit logging, and credential mutation blocks.
+     - Add **Capability 25: Hierarchical Multi-Tenancy (Organizations, Workspaces & Teams)** with inherited billing pools and strict workspace operational scoping.
+  2. **Universal Core Invariant Guardrails (Part I)**:
+     - Add **Defect Fix Protocol (Red-to-Green Reproduction)**: Mandate writing an isolated failing regression test before implementing any defect fix.
+     - Add **PII & Credential Scrubbing**: Absolute ban on logging raw secrets, auth tokens, or PII into telemetry, traces, or audit logs.
+
+- **Rationale & Alternatives**:
+  - *Alternative Considered (Ad-hoc Support Logins)*: Rejected because un-audited support logins violate SOC2/HIPAA and risk severe security breaches.
+  - *Alternative Considered (Global SSO Configuration)*: Storing SAML credentials globally in environment variables was rejected because enterprise multi-tenancy requires every tenant to configure its own distinct IdP (Okta, Azure AD).
+
+- **Consequences**:
+  - **Positive**: Complete enterprise deal-readiness; rock-solid tenant lifecycle handling; zero security backdoors for support; bulletproof agent safety during bug fixes and logging.
+  - **Trade-offs**: Introduces more domain states to manage during tenant status changes.

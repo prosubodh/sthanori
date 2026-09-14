@@ -23,7 +23,9 @@
 - **JWT / JTI**: JSON Web Token containing a cryptographic JTI (JWT ID nonce) for distributed real-time revocation.
 - **A11y & ARIA**: Accessibility standards and Accessible Rich Internet Applications markup attributes (`role`, `aria-*`).
 - **FOUC**: Flash of Unstyled Content; eliminated via early blocking theme resolution before DOM render.
-- **DevSecOps / SAST / SBOM**: Security automation: Static Application Security Testing and Software Bill of Materials.
+- **SCIM**: System for Cross-domain Identity Management: open standard REST API automating user and group provisioning from enterprise IdPs (Okta, Entra ID).
+- **Impersonation**: Temporary, dual-audited authentication allowing authorized support staff to operate within a tenant workspace without credential sharing.
+- **Hierarchical Tenancy**: Multi-tier tenant structure allowing parent organizations to manage pooled commercial entitlements and policies across child workspaces.
 - **Strict YAGNI ("You Aren't Gonna Need It")**: Absolute prohibition against scaffolding infrastructure, dependencies, or architectural ports for capabilities that have not been explicitly requested.
 - **Capability-Triggered Architecture (Just-In-Time)**: Activating specialized technical architectures (storage, queues, billing, search, real-time) only upon an explicit domain requirement or tenant contract trigger.
 
@@ -52,6 +54,8 @@
 - **Bounded Debugging & Blast Radius**:
   - Zero multi-file shotgun edits. Isolate the failure stack trace and modify only the single component under test.
   - If a fix fails or causes secondary regressions within 2 micro-iterations, immediately revert to the clean Git checkpoint.
+- **Defect Fix Protocol (Red-to-Green Reproduction)**: Never attempt to fix a defect or secondary regression without first writing an isolated, minimal failing test (acceptance or unit) that accurately reproduces the bug (Red). Only then implement the targeted fix to turn the test green. Never delete, comment out, or weaken an existing test to disguise a failure.
+- **PII & Credential Scrubbing (Data Hygiene)**: Absolute ban on outputting raw passwords, payment card numbers, access tokens, webhook secrets, or unmasked PII into structured logs, OpenTelemetry trace attributes, error envelopes, or test fixtures. All logged context must pass through a redaction filter.
 
 ---
 
@@ -299,3 +303,45 @@
 - **Architecture Protocol (When Triggered)**:
   - **Asynchronous Export Generation**: Full tenant exports (relational data in JSON/CSV + binary assets) run as background batch jobs via `IJobQueue`, delivering a temporary signed download link to the tenant admin.
   - **Cryptographic Cascade Erasure**: Deletion requests execute a deterministic cascade: soft-delete with grace period $\to$ permanent cryptographic purging of relational rows, cache keys, audit logs, and object storage partitions.
+
+---
+
+## 22. Capability: Enterprise SSO (SAML 2.0 / OIDC) & SCIM 2.0 Directory Sync
+- **Trigger**: Enterprise tenant requires federated Single Sign-On (Okta, Azure AD / Entra ID, Google Workspace) or automated directory user/group synchronization.
+- **Strict YAGNI**: For consumer, team-tier, or standard credentials applications, do NOT scaffold SAML endpoints or SCIM controllers.
+- **Architecture Protocol (When Triggered)**:
+  - **Owned SSO Port (`ISSOAdapter`)**: Wrap identity federation providers or libraries behind an owned boundary. Domain Core receives normalized domain identities (`FederatedIdentity`, `ExternalOrgId`).
+  - **Tenant-Isolated IdP Metadata**: Store SSO configurations (Entity ID, ACS URL, X.509 certificates, OIDC client secrets) strictly scoped to the tenant record. Never use global application-wide SSO configs for multi-tenant federation.
+  - **SCIM 2.0 Compliance**: Implement SCIM endpoints (`/scim/v2/Users`, `/scim/v2/Groups`) with bearer token authentication per tenant. Automated employee deprovisioning via SCIM must immediately revoke active JWT sessions and disable membership to eliminate zombie accounts.
+
+---
+
+## 23. Capability: Tenant Lifecycle State Machine & Service Degradation
+- **Trigger**: Tenant account statuses evolve across distinct lifecycle stages (`PROVISIONING`, `ACTIVE`, `PAST_DUE`, `SUSPENDED`, `ARCHIVED`, `DELETED`).
+- **Strict YAGNI**: If tenants are permanently active without billing states or trial periods, do NOT introduce complex lifecycle state machines.
+- **Architecture Protocol (When Triggered)**:
+  - **Explicit Domain State Machine**: Tenant entities model lifecycle state explicitly. State transitions are governed by domain events (e.g., `TenantPaymentFailed`, `GracePeriodExpired`, `TenantReactivated`).
+  - **Predictable Service Degradation**:
+    - `PAST_DUE`: Full application access continues with non-blocking UI warning banner; background jobs proceed.
+    - `SUSPENDED`: Mutating write requests reject with standard `402 Payment Required`; read requests permitted (read-only mode) or blocked based on commercial policy; tenant background jobs are paused/quarantined in `IJobQueue`; inbound webhooks are recorded in ledger but deferred.
+    - `ARCHIVED`: All tenant routes return `403 Forbidden` (`TENANT_ARCHIVED`); tenant data scheduled for cascade purge.
+
+---
+
+## 24. Capability: Secure Support Impersonation & Audit Access
+- **Trigger**: Platform administrators or customer support staff require temporary access to troubleshoot within a tenant's workspace.
+- **Strict YAGNI**: Do NOT create manual login backdoors, support passwords, or un-audited token bypasses.
+- **Architecture Protocol (When Triggered)**:
+  - **Short-Lived Impersonation Nonce**: Support impersonation issues an ephemeral token ($\le$ 60 minutes) containing explicit claims: `sub` (target user), `impersonator` (support staff ID), and `tenantId`.
+  - **Strict Security Guardrails**: While in an impersonation session, mutating tenant billing details, modifying user credentials, or generating new API keys is strictly blocked (`403 Forbidden - Impersonation Restricted`).
+  - **Mandatory Dual-Identity Audit Logging**: Every mutation executed during impersonation logs both the real staff actor (`actor_id = support_staff`) and the affected user context (`impersonated_user_id = target_user`) into the immutable audit ledger.
+
+---
+
+## 25. Capability: Hierarchical Multi-Tenancy (Organizations, Workspaces & Teams)
+- **Trigger**: Enterprise customers require managing multiple subsidiaries, business units, or project workspaces under a single parent contract.
+- **Strict YAGNI**: Single-tier tenancy (flat organizations) must remain the default. Do NOT introduce hierarchical data models until enterprise accounts require parent-child resource pooling.
+- **Architecture Protocol (When Triggered)**:
+  - **Hierarchical Entity Model**: Model relationship as `Enterprise Organization (Parent) -> Workspaces (Children) -> Teams -> Users`.
+  - **Inherited Entitlements & Shared Quotas**: Commercial subscriptions and billing pools are anchored at the Parent Organization. Quotas (e.g. total seats, API pools) are either shared globally or explicitly allocated to child workspaces via an allocation policy.
+  - **Strict Workspace Data Scoping**: All operational data (projects, assets, tickets) remains scoped strictly to the child `workspace_id`. Cross-workspace visibility is prohibited unless explicit parent-level administrative roles are evaluated.
