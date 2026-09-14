@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@sthanori/domain": "workspace:*",
     "drizzle-orm": "^0.39.3",
     "pg": "^8.13.3"
   },

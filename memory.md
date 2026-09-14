@@ -713,6 +713,33 @@
   - **Positive**: Clear, immutable roadmap; zero ambiguity on Day-1 MVP vs post-MVP priorities; issues live in GitHub for tracking and sprint assignment.
   - **Trade-offs**: Requires disciplined execution of Phase 1 before branching into Phase 2 capabilities.
 
+---
+
+## ADR-021: Property and Rentable Space Catalog Domain Architecture (Issue #1)
+
+- **Date**: 2026-09-14
+- **Status**: Accepted
+- **Context**: 
+  Implementing Issue #1 (`[P1-MVP-01] Property & Rentable Space Catalog (Residential Units)`) requires defining the foundational aggregate boundaries, validation invariants, database persistence with PostgreSQL Row-Level Security (RLS), and API/UI contracts for real estate inventory tracking.
+- **Decision**:
+  1. **Domain Aggregate Roots**:
+     - `PropertyAggregate`: Encapsulates `id`, immutable `tenantId`, `name`, `address` (street, city, state, postalCode, country), `propertyType` (enum with `RESIDENTIAL_MULTIFAMILY`, `SINGLE_FAMILY`, `CO_LIVING`, `COMMERCIAL`, `MIXED_USE`), and `currency` (ISO-4217 `USD` or `NPR`).
+     - `RentableSpaceAggregate`: Encapsulates `id`, `propertyId`, immutable `tenantId`, `spaceNumber` (e.g. "Apt 4B"), optional `buildingBlock` (e.g. "Building 1"), `spaceType` (`WHOLE_APARTMENT`, `PRIVATE_ROOM`, `COMMERCIAL_SUITE`), `floorLevel`, `floorAreaSqFt` (> 0), `maxOccupants` (> 0), `baseRentAmount` (integer in minor currency units), and `status` (`VACANT`, `OCCUPIED`, `MAINTENANCE`, `RESERVED`).
+  2. **Repository Ports**:
+     - `IPropertyRepository`: `save`, `findById(tenantId, id)`, `findAll(tenantId)`, `delete(tenantId, id)`.
+     - `IRentableSpaceRepository`: `save`, `findById(tenantId, id)`, `findByPropertyId(tenantId, propertyId)`, `delete(tenantId, id)`.
+  3. **Multi-Tenancy & RLS**:
+     - Drizzle schemas `properties` and `rentable_spaces` with PostgreSQL Row-Level Security enabled using `USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid)`.
+  4. **Outside-In TDD**:
+     - Outer acceptance test (`apps/api/test/property-catalog.e2e-spec.ts`) driving HTTP endpoints (`POST /properties`, `GET /properties`, `POST /properties/:id/spaces`, `GET /properties/:id/spaces`).
+     - Sibling unit tests with 100.00% coverage.
+- **Rationale & Alternatives**:
+  - *Property-Level Currency*: Enforcing operating currency at the property level ensures all child units and lease contracts operate uniformly while allowing multi-currency portfolios (e.g. US and Nepal properties in the same organization).
+- **Consequences**:
+  - **Positive**: Clean hexagonal boundaries; robust tenant isolation; pure domain models with zero ORM coupling; verified by London School Outside-In TDD.
+  - **Trade-offs**: Requires setting up Drizzle schemas and migrations for properties and rentable spaces.
+
+
 
 
 

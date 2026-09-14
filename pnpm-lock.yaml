@@ -306,6 +306,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@sthanori/domain':
+        specifier: workspace:*
+        version: link:../domain
       drizzle-orm:
         specifier: ^0.39.3
         version: 0.39.3(@types/pg@8.23.1)(pg@8.23.0)
